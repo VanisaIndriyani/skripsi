@@ -327,11 +327,9 @@
     @endif
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
-    @if($activeSession)
-    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+
     <script>
-        // --- Clock Logic ---
+        // --- Clock Logic (Always Active) ---
         function updateClock() {
             const now = new Date();
             const hours = String(now.getHours()).padStart(2, '0');
@@ -343,7 +341,11 @@
         }
         setInterval(updateClock, 1000);
         updateClock();
-
+    </script>
+    
+    @if($activeSession)
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <script>
         // --- Camera & Face Logic ---
         const video = document.getElementById('video');
         const capturedImage = document.getElementById('captured_image');
