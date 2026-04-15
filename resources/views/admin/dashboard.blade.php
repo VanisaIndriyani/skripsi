@@ -74,6 +74,59 @@
     </div>
 </div>
 
+<!-- Audit Logs Section -->
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-0 py-3">
+                <h6 class="m-0 fw-bold text-dark"><i class="fas fa-history me-2 text-warning"></i>Log Aktivitas Terbaru (Security Audit)</h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-4">Waktu</th>
+                                <th>Admin/Sistem</th>
+                                <th>Aktivitas</th>
+                                <th>Keterangan</th>
+                                <th class="text-end pe-4">Alamat IP</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($recentLogs as $log)
+                                <tr>
+                                    <td class="ps-4">
+                                        <small class="text-muted d-block">{{ $log->created_at->format('d/m/Y') }}</small>
+                                        <span class="fw-bold">{{ $log->created_at->format('H:i') }} WIB</span>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="avatar-sm bg-light rounded-circle d-flex align-items-center justify-content-center me-2" style="width: 30px; height: 30px;">
+                                                <i class="fas fa-user-shield text-secondary" style="font-size: 0.8rem;"></i>
+                                            </div>
+                                            <span>{{ $log->user ? $log->user->name : 'System' }}</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge rounded-pill bg-light text-dark border">{{ $log->activity }}</span>
+                                    </td>
+                                    <td><small>{{ $log->description }}</small></td>
+                                    <td class="text-end pe-4"><code class="small">{{ $log->ip_address }}</code></td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="5" class="text-center py-4 text-muted">Belum ada aktivitas tercatat</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Charts Section -->
 <div class="row g-4">
     <!-- Attendance Chart -->

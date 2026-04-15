@@ -83,10 +83,17 @@
                                 <form action="{{ route('admin.sessions.toggle', $session->id) }}" method="POST">
                                     @csrf
                                     @method('PATCH')
-                                    <button type="submit" class="btn btn-sm rounded-circle shadow-sm {{ $session->is_active ? 'btn-success text-white' : 'btn-light text-muted' }}" 
-                                            title="{{ $session->is_active ? 'Nonaktifkan Sesi' : 'Aktifkan Sesi' }}">
-                                        <i class="fas fa-check"></i>
-                                    </button>
+                                    @if($session->is_active)
+                                        <button type="submit" class="btn btn-sm btn-danger text-white rounded-circle shadow-sm" 
+                                                title="Nonaktifkan Sesi">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    @else
+                                        <button type="submit" class="btn btn-sm btn-light text-success rounded-circle shadow-sm" 
+                                                title="Aktifkan Sesi">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                    @endif
                                 </form>
 
                                 <form action="{{ route('admin.sessions.destroy', $session->id) }}" method="POST" class="delete-form">

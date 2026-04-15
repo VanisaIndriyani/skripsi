@@ -225,7 +225,17 @@
                     <i class="fas fa-file-alt"></i> <span>Laporan</span>
                 </a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link {{ request()->routeIs('admin.audit_logs*') ? 'active' : '' }}" href="{{ route('admin.audit_logs') }}" title="Audit Log">
+                    <i class="fas fa-history"></i> <span>Audit Log Aktivitas</span>
+                </a>
+            </li>
             <li class="nav-item mt-4 pt-3 border-top border-secondary">
+                <a class="nav-link {{ request()->routeIs('admin.settings*') ? 'active' : '' }}" href="{{ route('admin.settings') }}" title="Pengaturan">
+                    <i class="fas fa-cog"></i> <span>Pengaturan</span>
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link {{ request()->routeIs('admin.profile*') ? 'active' : '' }}" href="{{ route('admin.profile') }}" title="Edit Profil">
                     <i class="fas fa-user-cog"></i> <span>Edit Profil</span>
                 </a>

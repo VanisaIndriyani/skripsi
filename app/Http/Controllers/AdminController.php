@@ -12,6 +12,8 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 
+use App\Models\Setting;
+
 class AdminController extends Controller
 {
     public function index()
@@ -45,6 +47,9 @@ class AdminController extends Controller
             $payrollData[] = Payroll::where('month', $month)->where('year', $year)->sum('total_salary');
         }
 
+        // 4. Audit Logs (Recent 5)
+        $recentLogs = \App\Models\AuditLog::with('user')->orderBy('created_at', 'desc')->limit(5)->get();
+
         return view('admin.dashboard', compact(
             'totalEmployees', 
             'totalPresentToday', 
@@ -52,7 +57,8 @@ class AdminController extends Controller
             'attendanceLabels',
             'attendanceData',
             'payrollLabels',
-            'payrollData'
+            'payrollData',
+            'recentLogs'
         ));
     }
 
@@ -92,6 +98,8 @@ class AdminController extends Controller
             'photo' => $photoPath,
         ]);
 
+        $this->logActivity('Tambah Karyawan', 'Admin menambah karyawan baru: ' . $validated['name']);
+
         return redirect()->route('admin.employees')->with('success', 'Employee created successfully.');
     }
 
@@ -118,6 +126,8 @@ class AdminController extends Controller
             'photo' => $photoPath,
         ]);
 
+        $this->logActivity('Update Karyawan', 'Admin memperbarui data karyawan: ' . $user->name);
+
         return redirect()->route('admin.employees')->with('success', 'Employee updated successfully.');
     }
 
@@ -127,6 +137,7 @@ class AdminController extends Controller
             Storage::disk('public')->delete($user->photo);
         }
         $user->delete();
+        $this->logActivity('Hapus Karyawan', 'Admin menghapus data karyawan: ' . $user->name);
         return redirect()->route('admin.employees')->with('success', 'Employee deleted successfully.');
     }
 
@@ -164,5 +175,53 @@ class AdminController extends Controller
         $user->save();
 
         return redirect()->route('admin.profile')->with('success', 'Profile updated successfully.');
+    }
+
+    // Audit Logs (Full Page)
+    public function auditLogs(Request $request)
+    {
+        $query = \App\Models\AuditLog::with('user')->orderBy('created_at', 'desc');
+
+        if ($request->has('search') && $request->search) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('activity', 'like', "%$search%")
+                  ->orWhere('description', 'like', "%$search%")
+                  ->orWhereHas('user', function($qu) use ($search) {
+                      $qu->where('name', 'like', "%$search%");
+                  });
+            });
+        }
+
+        $logs = $query->paginate(20);
+        return view('admin.audit_logs.index', compact('logs'));
+    }
+
+    // Settings
+    public function settings()
+    {
+        $settings = [
+            'office_latitude' => Setting::get('office_latitude'),
+            'office_longitude' => Setting::get('office_longitude'),
+            'office_radius' => Setting::get('office_radius', 100),
+        ];
+        return view('admin.settings.index', compact('settings'));
+    }
+
+    public function updateSettings(Request $request)
+    {
+        $request->validate([
+            'office_latitude' => 'required|numeric',
+            'office_longitude' => 'required|numeric',
+            'office_radius' => 'required|numeric|min:10',
+        ]);
+
+        Setting::set('office_latitude', $request->office_latitude);
+        Setting::set('office_longitude', $request->office_longitude);
+        Setting::set('office_radius', $request->office_radius);
+
+        $this->logActivity('Update Pengaturan', 'Admin mengubah pengaturan lokasi kantor (Radius: ' . $request->office_radius . 'm)');
+
+        return redirect()->route('admin.settings')->with('success', 'Pengaturan lokasi berhasil diperbarui.');
     }
 }

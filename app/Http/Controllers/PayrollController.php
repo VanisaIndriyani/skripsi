@@ -19,6 +19,15 @@ class PayrollController extends Controller
             ->orderBy('year', 'desc')
             ->orderBy('month', 'desc')
             ->get();
+
+        // Calculate session count for each payroll
+        foreach ($payrolls as $payroll) {
+            $payroll->session_count = Attendance::where('user_id', $payroll->user_id)
+                ->whereBetween('date', [$payroll->start_date, $payroll->end_date])
+                ->where('status', 'present')
+                ->whereNotNull('work_session_id')
+                ->count();
+        }
             
         return view('admin.payrolls.index', compact('payrolls'));
     }
@@ -93,7 +102,15 @@ class PayrollController extends Controller
 
     public function print(Payroll $payroll)
     {
-        $pdf = Pdf::loadView('admin.payrolls.print', compact('payroll'));
+        // Get all attendances related to this payroll's date range
+        $attendances = Attendance::with('workSession')
+            ->where('user_id', $payroll->user_id)
+            ->whereBetween('date', [$payroll->start_date, $payroll->end_date])
+            ->where('status', 'present')
+            ->whereNotNull('work_session_id')
+            ->get();
+
+        $pdf = Pdf::loadView('admin.payrolls.print', compact('payroll', 'attendances'));
         return $pdf->download('slip-gaji-' . $payroll->user->name . '-' . $payroll->id . '.pdf');
     }
 }

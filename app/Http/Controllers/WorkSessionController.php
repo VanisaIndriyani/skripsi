@@ -43,6 +43,8 @@ class WorkSessionController extends Controller
 
         WorkSession::create($validated + ['is_active' => false]);
 
+        $this->logActivity('Tambah Sesi', 'Admin membuat sesi baru: ' . $validated['title']);
+
         return redirect()->route('admin.sessions')->with('success', 'Sesi kerja berhasil dibuat.');
     }
     
@@ -52,14 +54,26 @@ class WorkSessionController extends Controller
 
     public function toggleStatus(WorkSession $workSession)
     {
-        $workSession->update(['is_active' => !$workSession->is_active]);
-        $status = $workSession->is_active ? 'diaktifkan' : 'dinonaktifkan';
+        $newStatus = !$workSession->is_active;
+
+        // If we are activating this session, deactivate all others first
+        if ($newStatus) {
+            WorkSession::where('id', '!=', $workSession->id)
+                ->where('is_active', true)
+                ->update(['is_active' => false]);
+        }
+
+        $workSession->update(['is_active' => $newStatus]);
+        $status = $newStatus ? 'diaktifkan' : 'dinonaktifkan';
         
+        $this->logActivity('Update Status Sesi', 'Admin ' . ($newStatus ? 'mengaktifkan' : 'menonaktifkan') . ' sesi: ' . $workSession->title);
+
         return redirect()->back()->with('success', "Sesi berhasil $status.");
     }
     
     public function destroy(WorkSession $workSession)
     {
+        $this->logActivity('Hapus Sesi', 'Admin menghapus sesi: ' . $workSession->title);
         $workSession->delete();
         return redirect()->back()->with('success', 'Sesi kerja berhasil dihapus.');
     }

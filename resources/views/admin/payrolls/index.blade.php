@@ -2,13 +2,16 @@
 
 @section('content')
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h3 class="fw-bold">Data Penggajian</h3>
-    <a href="{{ route('admin.payrolls.create') }}" class="btn btn-gold rounded-pill px-4">
-        <i class="fas fa-plus me-2"></i> Generate Gaji
+    <div>
+        <h3 class="fw-bold mb-0">Manajemen Penggajian</h3>
+        <p class="text-muted small mb-0">Kelola dan cetak slip gaji karyawan harian.</p>
+    </div>
+    <a href="{{ route('admin.payrolls.create') }}" class="btn btn-gold rounded-pill px-4 shadow-sm">
+        <i class="fas fa-plus-circle me-2"></i> Generate Gaji Baru
     </a>
 </div>
 
-<div class="card border-0 shadow-sm">
+<div class="card border-0 shadow-sm overflow-hidden">
     <div class="card-header bg-white border-0 py-3">
         <div class="row align-items-center">
             <div class="col-md-5">
@@ -34,26 +37,30 @@
                 </select>
             </div>
             <div class="col-md-3 text-md-end mt-3 mt-md-0">
-                <span class="text-muted small">Total: <strong>{{ $payrolls->count() }}</strong> Data</span>
+                <span class="badge bg-light text-dark border py-2 px-3">
+                    <i class="fas fa-database me-1 text-gold"></i> Total: <strong>{{ $payrolls->count() }}</strong> Data
+                </span>
             </div>
         </div>
     </div>
 
     <div class="card-body p-0">
         @if(session('success'))
-            <div class="alert alert-success alert-dismissible fade show m-3" role="alert">
-                {{ session('success') }}
+            <div class="alert alert-success alert-dismissible fade show m-3 border-0 shadow-sm" role="alert">
+                <i class="fas fa-check-circle me-2"></i> {{ session('success') }}
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
         @endif
 
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0" id="payrollTable">
-                <thead class="table-light">
+                <thead class="table-light text-muted small text-uppercase">
                     <tr>
-                        <th class="ps-4">Periode Gaji</th>
-                        <th>Karyawan</th>
-                        <th>Total Terima</th>
+                        <th class="ps-4 py-3">Karyawan</th>
+                        <th>Periode Pembayaran</th>
+                        <th class="text-center">Sesi Kerja</th>
+                        <th>Total Diterima</th>
+                        <th>Status</th>
                         <th class="text-end pe-4">Aksi</th>
                     </tr>
                 </thead>
@@ -61,38 +68,60 @@
                     @forelse($payrolls as $payroll)
                     <tr>
                         <td class="ps-4">
-                            @if($payroll->start_date && $payroll->end_date)
-                                <span class="fw-bold text-dark">{{ \Carbon\Carbon::parse($payroll->start_date)->format('d M') }} - {{ \Carbon\Carbon::parse($payroll->end_date)->format('d M Y') }}</span>
-                            @else
-                                <span class="fw-bold text-dark">{{ date('F Y', mktime(0, 0, 0, $payroll->month, 10)) }}</span>
-                            @endif
-                        </td>
-                        <td>
                             <div class="d-flex align-items-center">
-                                <div class="bg-gold rounded-circle d-flex align-items-center justify-content-center me-3 fw-bold text-dark shadow-sm" style="width: 40px; height: 40px; font-size: 1rem;">
+                                <div class="avatar-circle bg-gold-light text-gold fw-bold d-flex align-items-center justify-content-center me-3" style="width: 45px; height: 45px; border-radius: 12px;">
                                     {{ substr($payroll->user->name, 0, 1) }}
                                 </div>
                                 <div>
                                     <div class="fw-bold text-dark">{{ $payroll->user->name }}</div>
-                                    <small class="text-muted">ID: #{{ str_pad($payroll->user->id, 5, '0', STR_PAD_LEFT) }}</small>
+                                    <small class="text-muted"><i class="fas fa-id-badge me-1"></i> #{{ str_pad($payroll->user->id, 4, '0', STR_PAD_LEFT) }}</small>
                                 </div>
                             </div>
                         </td>
                         <td>
-                            <div class="fw-bold text-success fs-6">Rp {{ number_format($payroll->total_salary, 0, ',', '.') }}</div>
-                            <small class="text-muted">Lunas</small>
+                            @if($payroll->start_date && $payroll->end_date)
+                                <div class="fw-medium text-dark">{{ \Carbon\Carbon::parse($payroll->start_date)->format('d M') }} - {{ \Carbon\Carbon::parse($payroll->end_date)->format('d M Y') }}</div>
+                                <small class="text-muted"><i class="far fa-calendar-alt me-1"></i> Rentang Waktu</small>
+                            @else
+                                <div class="fw-medium text-dark">{{ date('F Y', mktime(0, 0, 0, $payroll->month, 10)) }}</div>
+                                <small class="text-muted"><i class="far fa-calendar-alt me-1"></i> Bulanan</small>
+                            @endif
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-info-light text-info rounded-pill px-3">
+                                <i class="fas fa-briefcase me-1"></i> {{ $payroll->session_count }} Sesi
+                            </span>
+                        </td>
+                        <td>
+                            <div class="fw-bold text-dark">Rp {{ number_format($payroll->total_salary, 0, ',', '.') }}</div>
+                            <small class="text-muted">Nett Pay</small>
+                        </td>
+                        <td>
+                            @if($payroll->status == 'paid')
+                                <span class="badge bg-success-light text-success rounded-pill px-3"><i class="fas fa-check-circle me-1"></i> Lunas</span>
+                            @else
+                                <span class="badge bg-warning-light text-warning rounded-pill px-3"><i class="fas fa-clock me-1"></i> Pending</span>
+                            @endif
                         </td>
                         <td class="text-end pe-4">
-                            <a href="{{ route('admin.payrolls.print', $payroll->id) }}" target="_blank" class="btn btn-sm btn-light text-primary rounded-circle shadow-sm" title="Cetak Slip Gaji">
-                                <i class="fas fa-print"></i>
-                            </a>
+                            <div class="d-flex justify-content-end gap-2">
+                                <a href="{{ route('admin.payrolls.print', $payroll->id) }}" target="_blank" class="btn btn-sm btn-light text-primary rounded-circle shadow-sm p-2" title="Cetak Slip Gaji">
+                                    <i class="fas fa-print fa-fw"></i>
+                                </a>
+                                <button class="btn btn-sm btn-light text-info rounded-circle shadow-sm p-2" title="Detail">
+                                    <i class="fas fa-info-circle fa-fw"></i>
+                                </button>
+                            </div>
                         </td>
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="4" class="text-center py-5 text-muted">
-                            <img src="https://illustrations.popsy.co/gray/surr-list-is-empty.svg" width="150" class="mb-3 opacity-50">
-                            <p>Belum ada data penggajian.</p>
+                        <td colspan="6" class="text-center py-5">
+                            <div class="py-4">
+                                <img src="https://illustrations.popsy.co/gray/surr-list-is-empty.svg" width="180" class="mb-3 opacity-50">
+                                <h5 class="text-muted fw-normal">Belum ada data penggajian.</h5>
+                                <p class="text-muted small">Klik tombol "Generate Gaji" untuk membuat slip gaji baru.</p>
+                            </div>
                         </td>
                     </tr>
                     @endforelse
@@ -102,28 +131,62 @@
     </div>
 </div>
 
-<script>
-    document.getElementById('searchInput').addEventListener('keyup', filterTable);
-    document.getElementById('periodFilter').addEventListener('change', filterTable);
+<style>
+    .bg-gold-light { background-color: rgba(212, 175, 55, 0.1); }
+    .bg-info-light { background-color: rgba(13, 202, 240, 0.1); }
+    .bg-success-light { background-color: rgba(25, 135, 84, 0.1); }
+    .bg-warning-light { background-color: rgba(255, 193, 7, 0.1); }
+    .text-gold { color: #D4AF37; }
+    .btn-gold { background-color: #D4AF37; color: white; border: none; }
+    .btn-gold:hover { background-color: #B8962E; color: white; }
+    
+    .table thead th {
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+    
+    .table tbody tr {
+        transition: all 0.2s;
+    }
+    
+    .table tbody tr:hover {
+        background-color: rgba(212, 175, 55, 0.02);
+    }
+</style>
 
-    function filterTable() {
-        const searchText = document.getElementById('searchInput').value.toLowerCase();
-        const selectedPeriod = document.getElementById('periodFilter').value;
-        const tableRows = document.querySelectorAll('#payrollTable tbody tr');
+<script>
+    // Search Functionality
+    document.getElementById('searchInput').addEventListener('keyup', function() {
+        let searchText = this.value.toLowerCase();
+        let tableRows = document.querySelectorAll('#payrollTable tbody tr');
 
         tableRows.forEach(row => {
-            const period = row.querySelector('td:nth-child(1)').innerText.trim();
-            const name = row.querySelector('td:nth-child(2)').innerText.toLowerCase();
-            
-            const matchesSearch = name.includes(searchText);
-            const matchesPeriod = !selectedPeriod || period === selectedPeriod;
-
-            if (matchesSearch && matchesPeriod) {
+            let text = row.innerText.toLowerCase();
+            if (text.includes(searchText)) {
                 row.style.display = '';
             } else {
                 row.style.display = 'none';
             }
         });
-    }
+    });
+
+    // Period Filter
+    document.getElementById('periodFilter').addEventListener('change', function() {
+        let filterValue = this.value;
+        let tableRows = document.querySelectorAll('#payrollTable tbody tr');
+
+        tableRows.forEach(row => {
+            if (filterValue === '') {
+                row.style.display = '';
+            } else {
+                let periodText = row.cells[1].innerText;
+                if (periodText.includes(filterValue)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            }
+        });
+    });
 </script>
 @endsection

@@ -26,6 +26,10 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::get('/admin/profile', [AdminController::class, 'profile'])->name('admin.profile');
     Route::put('/admin/profile', [AdminController::class, 'updateProfile'])->name('admin.profile.update');
 
+    // Settings
+    Route::get('/admin/settings', [AdminController::class, 'settings'])->name('admin.settings');
+    Route::put('/admin/settings', [AdminController::class, 'updateSettings'])->name('admin.settings.update');
+
     // Employees
     Route::get('/admin/employees', [AdminController::class, 'employees'])->name('admin.employees');
     Route::post('/admin/employees', [AdminController::class, 'storeEmployee'])->name('admin.employees.store');
@@ -51,6 +55,10 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     // Reports
     Route::get('/admin/reports', [ReportController::class, 'index'])->name('admin.reports');
     Route::get('/admin/reports/print', [ReportController::class, 'print'])->name('admin.reports.print');
+    Route::get('/admin/reports/export-csv', [ReportController::class, 'exportCSV'])->name('admin.reports.export_csv');
+
+    // Audit Logs
+    Route::get('/admin/audit-logs', [AdminController::class, 'auditLogs'])->name('admin.audit_logs');
 });
 
 // Employee Routes (Optional now, as attendance is public)

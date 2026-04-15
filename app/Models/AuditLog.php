@@ -5,21 +5,16 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Payroll extends Model
+class AuditLog extends Model
 {
     use HasFactory;
 
     protected $fillable = [
         'user_id',
-        'month',
-        'year',
-        'start_date',
-        'end_date',
-        'base_salary',
-        'allowances',
-        'deductions',
-        'total_salary',
-        'status',
+        'activity',
+        'description',
+        'ip_address',
+        'user_agent'
     ];
 
     public function user()

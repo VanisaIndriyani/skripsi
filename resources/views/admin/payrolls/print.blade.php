@@ -124,15 +124,25 @@
         <table class="earnings-table">
             <thead>
                 <tr>
-                    <th>Keterangan</th>
-                    <th class="amount">Jumlah</th>
+                    <th>Tanggal & Sesi Kerja</th>
+                    <th class="amount">Upah</th>
                 </tr>
             </thead>
             <tbody>
+                @foreach($attendances as $attendance)
                 <tr>
-                    <td>Upah Sesi Kerja</td>
-                    <td class="amount">Rp {{ number_format($payroll->allowances, 0, ',', '.') }}</td>
+                    <td>
+                        <strong>{{ \Carbon\Carbon::parse($attendance->date)->format('d/m/Y') }}</strong> - 
+                        {{ $attendance->workSession->title }}
+                        <br>
+                        <small style="color: #666;">
+                            Absensi: {{ \Carbon\Carbon::parse($attendance->time_in)->format('H:i') }}
+                        </small>
+                    </td>
+                    <td class="amount">Rp {{ number_format($attendance->workSession->wage, 0, ',', '.') }}</td>
                 </tr>
+                @endforeach
+                
                 @if($payroll->deductions > 0)
                 <tr>
                     <td style="color: red;">Potongan Lain-lain</td>
@@ -140,7 +150,7 @@
                 </tr>
                 @endif
                 <tr class="total-row">
-                    <td>TOTAL DITERIMA</td>
+                    <td>TOTAL DITERIMA ({{ $attendances->count() }} Sesi)</td>
                     <td class="amount">Rp {{ number_format($payroll->total_salary, 0, ',', '.') }}</td>
                 </tr>
             </tbody>

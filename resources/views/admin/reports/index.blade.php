@@ -3,14 +3,24 @@
 @section('content')
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h3 class="fw-bold">Laporan & Rekapitulasi</h3>
-    <form action="{{ route('admin.reports.print') }}" method="GET" target="_blank" class="d-flex">
-        <input type="hidden" name="type" value="{{ $type }}">
-        <input type="hidden" name="start_date" value="{{ $start_date }}">
-        <input type="hidden" name="end_date" value="{{ $end_date }}">
-        <button type="submit" class="btn btn-gold rounded-pill px-4 shadow-sm">
-            <i class="fas fa-file-pdf me-2"></i> Export PDF
-        </button>
-    </form>
+    <div class="d-flex gap-2">
+        <form action="{{ route('admin.reports.export_csv') }}" method="GET" class="d-inline">
+            <input type="hidden" name="type" value="{{ $type }}">
+            <input type="hidden" name="start_date" value="{{ $start_date }}">
+            <input type="hidden" name="end_date" value="{{ $end_date }}">
+            <button type="submit" class="btn btn-outline-success rounded-pill px-4 shadow-sm fw-bold">
+                <i class="fas fa-file-excel me-2"></i> Export Excel (CSV)
+            </button>
+        </form>
+        <form action="{{ route('admin.reports.print') }}" method="GET" target="_blank" class="d-inline">
+            <input type="hidden" name="type" value="{{ $type }}">
+            <input type="hidden" name="start_date" value="{{ $start_date }}">
+            <input type="hidden" name="end_date" value="{{ $end_date }}">
+            <button type="submit" class="btn btn-gold rounded-pill px-4 shadow-sm">
+                <i class="fas fa-file-pdf me-2"></i> Export PDF
+            </button>
+        </form>
+    </div>
 </div>
 
 <!-- Filter Card -->

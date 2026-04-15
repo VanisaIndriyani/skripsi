@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Attendance;
 use App\Models\User;
 use App\Models\WorkSession;
+use App\Models\Setting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
@@ -37,7 +38,29 @@ class AttendanceController extends Controller
         $request->validate([
             'user_id' => 'required|exists:users,id',
             'photo' => 'required',
+            'location' => 'required',
         ]);
+
+        // Geo Validation
+        $officeLat = Setting::get('office_latitude');
+        $officeLng = Setting::get('office_longitude');
+        $maxRadius = Setting::get('office_radius', 100);
+
+        if ($officeLat && $officeLng) {
+            $userLoc = explode(',', $request->location);
+            if (count($userLoc) == 2) {
+                $lat = floatval($userLoc[0]);
+                $lng = floatval($userLoc[1]);
+                
+                $distance = $this->calculateDistance($officeLat, $officeLng, $lat, $lng);
+                
+                if ($distance > $maxRadius) {
+                    return redirect()->back()->with('error', 'Anda berada di luar jangkauan kantor (' . round($distance) . 'm). Maksimal ' . $maxRadius . 'm.');
+                }
+            } else {
+                return redirect()->back()->with('error', 'Format lokasi tidak valid.');
+            }
+        }
 
         // Find active session
         $session = WorkSession::where('is_active', true)
@@ -79,10 +102,30 @@ class AttendanceController extends Controller
             'photo_in' => $photoPath
         ]);
 
+        $employee = User::find($request->user_id);
+        $this->logActivity('Absensi Kiosk', 'Karyawan ' . $employee->name . ' melakukan absensi pada sesi ' . $session->title);
+
         return redirect()->back()->with('success', 'Absensi Berhasil! Selamat Bekerja.');
     }
 
-    // Keep original store/update for backward compatibility if needed, 
+    // Calculate Distance (Haversine Formula)
+    private function calculateDistance($lat1, $lon1, $lat2, $lon2)
+    {
+        $earthRadius = 6371000; // Meters
+
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLon = deg2rad($lon2 - $lon1);
+
+        $a = sin($dLat / 2) * sin($dLat / 2) +
+             cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
+             sin($dLon / 2) * sin($dLon / 2);
+
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+        return $earthRadius * $c;
+    }
+
+    // Keep original store/update for backward compatibility if needed,  
     // but effectively the kiosk replaces the individual login flow.
     public function store(Request $request)
     {

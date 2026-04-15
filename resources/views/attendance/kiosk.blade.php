@@ -359,7 +359,34 @@
         let stream = null;
         let labeledFaceDescriptors = [];
         let faceMatcher = null;
+        let detectionInterval = null;
+        let isProcessing = false;
+        let isLivenessVerified = false;
         const MODEL_URL = "{{ asset('models') }}";
+
+        // Geolocation Constants
+        const OFFICE_LAT = {{ \App\Models\Setting::get('office_latitude', 0) }};
+        const OFFICE_LNG = {{ \App\Models\Setting::get('office_longitude', 0) }};
+        const MAX_RADIUS = {{ \App\Models\Setting::get('office_radius', 100) }};
+
+        // Haversine Formula Helper
+        function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+            var R = 6371; // Radius of the earth in km
+            var dLat = deg2rad(lat2-lat1);
+            var dLon = deg2rad(lon2-lon1); 
+            var a = 
+                Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+                Math.sin(dLon/2) * Math.sin(dLon/2)
+                ; 
+            var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+            var d = R * c; // Distance in km
+            return d;
+        }
+
+        function deg2rad(deg) {
+            return deg * (Math.PI/180)
+        }
 
         const employees = [
             @foreach($employees as $employee)
@@ -410,15 +437,67 @@
             ).then(results => results.filter(r => r !== null));
         }
 
-        // --- UI Interactions ---
+        // UI Interactions ---
         function openScanner() {
-            document.getElementById('landingPage').style.display = 'none';
-            document.getElementById('scanInterface').style.display = 'flex';
-            startVideo();
+            // Show loading alert while checking location
+            Swal.fire({
+                title: 'Memproses...',
+                text: 'Sedang memvalidasi lokasi Anda',
+                allowOutsideClick: false,
+                showConfirmButton: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(position => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    document.getElementById('location').value = lat + "," + lng;
+
+                    // Calculate Distance
+                    const distance = getDistanceFromLatLonInKm(lat, lng, OFFICE_LAT, OFFICE_LNG) * 1000; // Convert to meters
+                    
+                    if (distance > MAX_RADIUS) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Lokasi Tidak Valid',
+                            text: `Anda berada ${Math.round(distance)}m dari kantor. Maksimal ${MAX_RADIUS}m.`,
+                            confirmButtonColor: '#d33',
+                            allowOutsideClick: true
+                        });
+                    } else {
+                        // Location valid, proceed to open scanner
+                        Swal.close();
+                        document.getElementById('landingPage').style.display = 'none';
+                        document.getElementById('scanInterface').style.display = 'flex';
+                        startVideo();
+                    }
+                }, error => {
+                    let errorMsg = 'Gagal mendapatkan lokasi.';
+                    if (error.code === 1) errorMsg = 'Mohon izinkan akses lokasi untuk melakukan absensi.';
+                    
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Akses Lokasi Ditolak',
+                        text: errorMsg,
+                        confirmButtonColor: '#d33'
+                    });
+                }, { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Browser Tidak Mendukung',
+                    text: 'Browser Anda tidak mendukung Geolocation.',
+                    confirmButtonColor: '#d33'
+                });
+            }
         }
 
         function closeScanner() {
             stopVideo();
+            stopScanning();
             document.getElementById('scanInterface').style.display = 'none';
             document.getElementById('landingPage').style.display = 'block';
             resetCamera();
@@ -436,6 +515,11 @@
                         video.play();
                         statusText.innerText = "Silahkan posisikan wajah Anda";
                         statusText.className = "scan-status text-white";
+                        
+                        // Start scanning once video is playing
+                        video.onplay = () => {
+                            startScanning();
+                        };
                     })
                     .catch(err => {
                         statusText.innerText = "Gagal akses kamera: " + err.message;
@@ -451,13 +535,74 @@
             }
         }
 
-        async function captureAndDetect() {
-            if (!faceMatcher) {
-                statusText.innerText = "Sistem AI belum siap. Tunggu sebentar...";
-                return;
-            }
+        function startScanning() {
+            if (detectionInterval) clearInterval(detectionInterval);
+            
+            detectionInterval = setInterval(async () => {
+                if (!faceMatcher || isProcessing) return;
+                
+                // Using landmarks for liveness detection
+                const detections = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+                    .withFaceLandmarks()
+                    .withFaceDescriptor();
 
-            // Capture
+                if (detections) {
+                    const result = faceMatcher.findBestMatch(detections.descriptor);
+                    
+                    if (result.label !== 'unknown') {
+                        const employee = employees.find(e => e.name === result.label);
+                        if (employee) {
+                            detectedNameInput.value = employee.name;
+                            userIdInput.value = employee.id;
+
+                            // --- Liveness Detection: Simple Blink Check ---
+                            const landmarks = detections.landmarks;
+                            const leftEye = landmarks.getLeftEye();
+                            const rightEye = landmarks.getRightEye();
+                            
+                            // Calculate Eye Aspect Ratio (EAR) simplified
+                            const leftEAR = (Math.abs(leftEye[1].y - leftEye[5].y) + Math.abs(leftEye[2].y - leftEye[4].y)) / (2 * Math.abs(leftEye[0].x - leftEye[3].x));
+                            const rightEAR = (Math.abs(rightEye[1].y - rightEye[5].y) + Math.abs(rightEye[2].y - rightEye[4].y)) / (2 * Math.abs(rightEye[0].x - rightEye[3].x));
+                            
+                            const avgEAR = (leftEAR + rightEAR) / 2;
+
+                            if (avgEAR < 0.22) { // Blink detected
+                                isLivenessVerified = true;
+                                statusText.innerText = "Berkedip Terdeteksi! Silahkan Absen ✅";
+                                statusText.className = "scan-status text-success";
+                                submitBtn.disabled = false;
+                                // Auto capture after blink
+                                // captureAndDetect(); // Optional: uncomment for fully auto
+                            } else if (!isLivenessVerified) {
+                                statusText.innerText = "Wajah Dikenali. Berkedip untuk Konfirmasi! 👁️";
+                                statusText.className = "scan-status text-warning";
+                                submitBtn.disabled = true;
+                            }
+                        }
+                    } else {
+                        detectedNameInput.value = "Mencari wajah...";
+                        userIdInput.value = "";
+                        isLivenessVerified = false;
+                        submitBtn.disabled = true;
+                        statusText.innerText = "Wajah tidak dikenali";
+                        statusText.className = "scan-status text-warning";
+                    }
+                }
+            }, 300); // Faster interval for blink detection
+        }
+
+        function stopScanning() {
+            if (detectionInterval) {
+                clearInterval(detectionInterval);
+                detectionInterval = null;
+            }
+        }
+
+        async function captureAndDetect() {
+            isProcessing = true;
+            stopScanning();
+            
+            // Capture the final frame for the record
             const canvas = document.createElement('canvas');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
@@ -468,20 +613,19 @@
             video.style.display = 'none';
             capturedImage.src = dataUrl;
             capturedImage.style.display = 'block';
-            captureBtn.classList.add('d-none'); // Hide capture button ONLY
-            actionButtons.classList.remove('d-none'); // Show action buttons
+            captureBtn.classList.add('d-none');
+            actionButtons.classList.remove('d-none');
             
             document.getElementById('photo').value = dataUrl;
             
-            // Detection
-            statusText.innerText = "Menganalisa...";
-            statusText.className = "scan-status text-warning";
-
-            const img = document.createElement('img');
-            img.src = dataUrl;
-            
-            img.onload = async () => {
-                try {
+            // Final check if not already matched
+            if (!userIdInput.value) {
+                statusText.innerText = "Menganalisa foto final...";
+                statusText.className = "scan-status text-warning";
+                
+                const img = document.createElement('img');
+                img.src = dataUrl;
+                img.onload = async () => {
                     const detection = await faceapi.detectSingleFace(img).withFaceLandmarks().withFaceDescriptor();
                     if (detection) {
                         const result = faceMatcher.findBestMatch(detection.descriptor);
@@ -500,10 +644,11 @@
                     } else {
                         handleScanError("Wajah tidak ditemukan ❌");
                     }
-                } catch (e) {
-                    handleScanError("Error sistem ⚠️");
-                }
-            };
+                };
+            } else {
+                statusText.innerText = "Identitas Terkonfirmasi ✅";
+                statusText.className = "scan-status text-success";
+            }
         }
 
         function handleScanError(msg) {
@@ -515,6 +660,7 @@
         }
 
         function resetCamera() {
+            isProcessing = false;
             video.style.display = 'block';
             capturedImage.style.display = 'none';
             captureBtn.classList.remove('d-none');
@@ -524,6 +670,7 @@
             submitBtn.disabled = true;
             statusText.innerText = "Silahkan posisikan wajah Anda";
             statusText.className = "scan-status text-white";
+            startScanning(); // Restart the scanning loop
         }
 
         function submitAttendance() {
@@ -531,12 +678,8 @@
             document.getElementById('attendanceForm').submit();
         }
 
-        // Geolocation
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(pos => {
-                document.getElementById('location').value = pos.coords.latitude + "," + pos.coords.longitude;
-            });
-        }
+        // Call checkLocation on load
+        // checkLocation(); // Removed to only check on TAP TO START
     </script>
     @endif
 </body>
