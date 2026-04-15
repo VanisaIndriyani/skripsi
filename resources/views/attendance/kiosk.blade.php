@@ -160,7 +160,7 @@
         
         .scan-container {
             width: 100%;
-            max-width: 480px;
+            max-width: 350px; /* Adjusted from 480px to 350px */
             display: flex;
             flex-direction: column;
             gap: 20px;
