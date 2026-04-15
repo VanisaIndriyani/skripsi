@@ -615,6 +615,10 @@
                         }
                     }
                 };
+            } else {
+                // If user was already detected by live scanner, just enable the button
+                submitBtn.disabled = false;
+                updateStatus("Identitas Terkonfirmasi", "success");
             }
         }
 
@@ -633,12 +637,8 @@
         }
 
         function submitAttendance() {
-            console.log('submitAttendance() called');
-            if(!userIdInput.value) {
-                console.log('userIdInput.value is empty, returning.');
-                return;
-            }
-            console.log('userIdInput.value:', userIdInput.value);
+            if(!userIdInput.value) return;
+            
             Swal.fire({
                 title: 'Menyimpan Absensi',
                 text: 'Mohon tunggu sebentar...',
@@ -646,7 +646,6 @@
                 didOpen: () => Swal.showLoading()
             });
             document.getElementById('attendanceForm').submit();
-            console.log('attendanceForm submitted.');
         }
     </script>
     @endif
