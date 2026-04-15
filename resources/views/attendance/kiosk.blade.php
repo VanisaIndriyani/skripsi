@@ -214,12 +214,13 @@
         }
         
         .scan-info-card {
-            background: var(--glass-bg);
-            backdrop-filter: blur(10px);
+            background: rgba(15, 15, 15, 0.8); /* Darker and more opaque */
+            backdrop-filter: blur(20px);
             border: 1px solid var(--glass-border);
             border-radius: 25px;
             padding: 20px;
             text-align: center;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); /* Stronger shadow */
         }
         
         .status-badge {
@@ -250,12 +251,39 @@
             z-index: 10000;
         }
 
+        .btn-gold {
+            background-color: var(--primary-color);
+            color: #000;
+            border: none;
+            font-weight: 700;
+            font-family: 'Outfit', sans-serif; /* Add this line */
+            transition: all 0.3s;
+        }
+        
+        .btn-gold:hover {
+            background-color: var(--primary-light);
+            color: #000;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(212, 175, 55, 0.4);
+        }
+        
+        .btn-gold:disabled {
+            background-color: #333;
+            color: #666;
+            opacity: 0.7;
+        }
+
         /* Mobile Adjustments */
         @media (max-width: 576px) {
             .clock-widget { font-size: 4rem; }
-            .scan-container { padding: 10px; }
+            .scan-container { padding: 10px; margin: auto; } /* Added margin: auto */
             .video-container { border-radius: 30px; }
             .scan-info-card { padding: 15px; } /* Adjusted padding for smaller screens */
+            .scan-overlay {
+                overflow-y: auto; /* Allow scrolling on small screens */
+                align-items: flex-start; /* Align to top instead of center */
+                padding: 40px 15px; /* More vertical padding */
+            }
         }
     </style>
 </head>
