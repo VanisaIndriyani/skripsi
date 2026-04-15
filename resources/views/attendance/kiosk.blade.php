@@ -145,6 +145,7 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
+            transform: scaleX(-1); /* Add this line to un-mirror the camera */
         }
 
         #captured_image { display: none; }

@@ -42,9 +42,15 @@ class AttendanceController extends Controller
         ]);
 
         // Geo Validation
-        $officeLat = Setting::get('office_latitude');
-        $officeLng = Setting::get('office_longitude');
-        $maxRadius = Setting::get('office_radius', 100);
+        $officeLat = \Illuminate\Support\Facades\Cache::remember('office_latitude', 60*24, function () {
+            return Setting::get('office_latitude');
+        });
+        $officeLng = \Illuminate\Support\Facades\Cache::remember('office_longitude', 60*24, function () {
+            return Setting::get('office_longitude');
+        });
+        $maxRadius = \Illuminate\Support\Facades\Cache::remember('office_radius', 60*24, function () {
+            return Setting::get('office_radius', 100);
+        });
 
         if ($officeLat && $officeLng) {
             $userLoc = explode(',', $request->location);
