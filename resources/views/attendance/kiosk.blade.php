@@ -255,6 +255,7 @@
             .clock-widget { font-size: 4rem; }
             .scan-container { padding: 10px; }
             .video-container { border-radius: 30px; }
+            .scan-info-card { padding: 15px; } /* Adjusted padding for smaller screens */
         }
     </style>
 </head>
