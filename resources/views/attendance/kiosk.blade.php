@@ -604,7 +604,12 @@
         }
 
         function submitAttendance() {
-            if(!userIdInput.value) return;
+            console.log('submitAttendance() called');
+            if(!userIdInput.value) {
+                console.log('userIdInput.value is empty, returning.');
+                return;
+            }
+            console.log('userIdInput.value:', userIdInput.value);
             Swal.fire({
                 title: 'Menyimpan Absensi',
                 text: 'Mohon tunggu sebentar...',
@@ -612,6 +617,7 @@
                 didOpen: () => Swal.showLoading()
             });
             document.getElementById('attendanceForm').submit();
+            console.log('attendanceForm submitted.');
         }
     </script>
     @endif
