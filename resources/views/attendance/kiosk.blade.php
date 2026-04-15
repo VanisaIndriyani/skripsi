@@ -21,6 +21,7 @@
         }
         
         body {
+            box-sizing: border-box; /* Add this line */
             background: radial-gradient(circle at top right, #1a1a1a, #0a0a0a);
             font-family: 'Outfit', sans-serif;
             color: #fff;
@@ -29,7 +30,6 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            overflow: hidden;
             padding: 20px;
         }
         
