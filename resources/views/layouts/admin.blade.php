@@ -185,6 +185,7 @@
             }
         }
     </style>
+    @yield('styles')
 </head>
 <body>
 
@@ -355,5 +356,6 @@
             });
         });
     </script>
+    @yield('scripts')
 </body>
 </html>
