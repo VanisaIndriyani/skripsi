@@ -29,7 +29,16 @@ class AttendanceController extends Controller
         // Get all employees
         $employees = User::where('role', 'employee')->orderBy('name')->get();
 
-        return view('attendance.kiosk', compact('activeSession', 'employees'));
+        $attendedUserIds = [];
+        if ($activeSession) {
+            $attendedUserIds = Attendance::where('work_session_id', $activeSession->id)
+                ->pluck('user_id')
+                ->map(fn ($id) => (string) $id)
+                ->values()
+                ->all();
+        }
+
+        return view('attendance.kiosk', compact('activeSession', 'employees', 'attendedUserIds'));
     }
 
     // Public Store (No Auth required, user_id from request)

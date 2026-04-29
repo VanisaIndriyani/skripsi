@@ -411,10 +411,37 @@
         let stream = null;
         let labeledFaceDescriptors = [];
         let faceMatcher = null;
+        let isFaceSystemReady = false;
+        let isDetecting = false;
         let detectionInterval = null;
         let isProcessing = false;
         let isLivenessVerified = false;
+        let isAlreadyAttended = false;
+        let candidateEmployee = null;
+        let currentMatchLabel = null;
+        let stableMatchFrames = 0;
+        let livenessStartedAt = null;
+        let blinkCount = 0;
+        let blinkState = 'open';
+        let missingFaceFrames = 0;
+        let unknownFaceFrames = 0;
+
+        const attendedUserIds = @json($attendedUserIds ?? []);
+
+        const MATCH_THRESHOLD = 0.48;
+        const STABLE_FRAMES_REQUIRED = 2;
+        const MIN_FACE_SCORE = 0.45;
+        const REQUIRED_BLINKS = 1;
+        const LIVENESS_TIMEOUT_MS = 15000;
+        const BLINK_LOW_THRESHOLD = 0.21;
+        const BLINK_HIGH_THRESHOLD = 0.23;
+        const FACE_MISSING_RESET_FRAMES = 10;
+        const UNKNOWN_RESET_FRAMES = 10;
+        const INSTRUCTION_HOLD_MS = 2500;
+        const BLINK_INSTRUCTION_TEXT = `Kedip ${REQUIRED_BLINKS}x untuk verifikasi`;
         const MODEL_URL = "{{ asset('models') }}";
+
+        setCaptureReady(false);
 
         const OFFICE_LAT = {{ \App\Models\Setting::get('office_latitude', 0) }};
         const OFFICE_LNG = {{ \App\Models\Setting::get('office_longitude', 0) }};
@@ -445,13 +472,13 @@
             Promise.all([
                 faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
                 faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-                faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-                faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL)
+                faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
             ]).then(async () => {
                 labeledFaceDescriptors = await loadLabeledImages();
                 if(labeledFaceDescriptors.length > 0) {
-                    faceMatcher = new faceapi.FaceMatcher(labeledFaceDescriptors, 0.45);
+                    faceMatcher = new faceapi.FaceMatcher(labeledFaceDescriptors, MATCH_THRESHOLD);
                 }
+                isFaceSystemReady = true;
             }).catch(err => console.error(err));
         }
 
@@ -461,7 +488,10 @@
                     const descriptions = [];
                     try {
                         const img = await faceapi.fetchImage(employee.photo);
-                        const detections = await faceapi.detectSingleFace(img).withFaceLandmarks().withFaceDescriptor();
+                        const detections = await faceapi
+                            .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: MIN_FACE_SCORE }))
+                            .withFaceLandmarks()
+                            .withFaceDescriptor();
                         if(detections) {
                             descriptions.push(detections.descriptor);
                             return new faceapi.LabeledFaceDescriptors(employee.name, descriptions);
@@ -530,49 +560,128 @@
             video.srcObject = null;
         }
 
-        function updateStatus(text, type) {
+        let statusHoldUntil = 0;
+        let lastStatusText = "";
+        let lastStatusType = "";
+
+        function updateStatus(text, type, holdMs = 0, force = false) {
+            const now = Date.now();
+            if (!force && now < statusHoldUntil) return;
+            if (text === lastStatusText && type === lastStatusType) return;
             statusText.innerText = text;
             statusBadge.className = `status-badge bg-${type} ${type === 'warning' ? 'text-dark' : 'text-white'}`;
+            lastStatusText = text;
+            lastStatusType = type;
+            statusHoldUntil = holdMs > 0 ? now + holdMs : 0;
+        }
+
+        function setCaptureReady(ready) {
+            captureBtn.disabled = !ready;
         }
 
         function startScanning() {
             if (detectionInterval) clearInterval(detectionInterval);
             detectionInterval = setInterval(async () => {
-                if (!faceMatcher || isProcessing) return;
-                
-                const detections = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
-                    .withFaceLandmarks()
-                    .withFaceDescriptor();
-
-                if (detections) {
-                    const result = faceMatcher.findBestMatch(detections.descriptor);
-                    if (result.label !== 'unknown') {
-                        const employee = employees.find(e => e.name === result.label);
-                        if (employee) {
-                            detectedNameInput.value = employee.name;
-                            userIdInput.value = employee.id;
-                            
-                            const landmarks = detections.landmarks;
-                            const leftEye = landmarks.getLeftEye();
-                            const rightEye = landmarks.getRightEye();
-                            const leftEAR = (Math.abs(leftEye[1].y - leftEye[5].y) + Math.abs(leftEye[2].y - leftEye[4].y)) / (2 * Math.abs(leftEye[0].x - leftEye[3].x));
-                            const rightEAR = (Math.abs(rightEye[1].y - rightEye[5].y) + Math.abs(rightEye[2].y - rightEye[4].y)) / (2 * Math.abs(rightEye[0].x - rightEye[3].x));
-                            
-                            if ((leftEAR + rightEAR) / 2 < 0.22) {
-                                isLivenessVerified = true;
-                                updateStatus("Wajah Terverifikasi", "success");
-                                submitBtn.disabled = false;
-                                scanLine.style.animationPlayState = 'paused';
-                            } else if (!isLivenessVerified) {
-                                updateStatus("Berkediplah...", "warning");
-                            }
-                        }
-                    } else {
-                        detectedNameInput.value = "Mencari wajah...";
-                        updateStatus("Wajah Tidak Dikenal", "warning");
-                    }
+                if (isProcessing) return;
+                if (isDetecting) return;
+                if (!isFaceSystemReady) {
+                    setCaptureReady(false);
+                    if (!isLivenessVerified) updateStatus("Memuat model wajah...", "info", 0, true);
+                    return;
                 }
-            }, 200);
+                if (!faceMatcher) {
+                    setCaptureReady(false);
+                    if (!isLivenessVerified) updateStatus("Data wajah karyawan belum ada", "warning", 0, true);
+                    return;
+                }
+                isDetecting = true;
+                let detections = null;
+                try {
+                    detections = await faceapi
+                        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 128, scoreThreshold: MIN_FACE_SCORE }))
+                        .withFaceLandmarks()
+                        .withFaceDescriptor();
+                } finally {
+                    isDetecting = false;
+                }
+
+                if (!detections) {
+                    setCaptureReady(false);
+                    missingFaceFrames += 1;
+                    if (missingFaceFrames >= FACE_MISSING_RESET_FRAMES) resetMatchState();
+                    if (!isLivenessVerified) {
+                        if (candidateEmployee) updateStatus(BLINK_INSTRUCTION_TEXT, "warning", INSTRUCTION_HOLD_MS);
+                        else updateStatus("Arahkan wajah ke kamera", "info");
+                    }
+                    return;
+                }
+
+                const result = faceMatcher.findBestMatch(detections.descriptor);
+                if (result.label === 'unknown' || result.distance > MATCH_THRESHOLD) {
+                    setCaptureReady(false);
+                    unknownFaceFrames += 1;
+                    if (unknownFaceFrames >= UNKNOWN_RESET_FRAMES) resetMatchState();
+                    if (!candidateEmployee) detectedNameInput.value = "Mencari wajah...";
+                    if (!isLivenessVerified) {
+                        if (candidateEmployee) updateStatus(BLINK_INSTRUCTION_TEXT, "warning", INSTRUCTION_HOLD_MS);
+                        else updateStatus("Wajah Tidak Dikenal", "warning");
+                    }
+                    return;
+                }
+
+                missingFaceFrames = 0;
+                unknownFaceFrames = 0;
+
+                if (currentMatchLabel === result.label) {
+                    stableMatchFrames += 1;
+                } else {
+                    currentMatchLabel = result.label;
+                    stableMatchFrames = 1;
+                }
+
+                if (stableMatchFrames < STABLE_FRAMES_REQUIRED) {
+                    if (!isLivenessVerified) updateStatus("Mengunci identitas...", "info");
+                    return;
+                }
+
+                const matchedEmployee = employees.find(e => e.name === result.label);
+                if (!matchedEmployee) {
+                    resetMatchState();
+                    if (!isLivenessVerified) updateStatus("Wajah Tidak Dikenal", "warning");
+                    return;
+                }
+
+                if (!candidateEmployee || candidateEmployee.id !== matchedEmployee.id) {
+                    candidateEmployee = matchedEmployee;
+                    detectedNameInput.value = "";
+                    isAlreadyAttended = attendedUserIds.includes(String(matchedEmployee.id));
+                    resetLivenessState();
+                }
+
+                if (isLivenessVerified) return;
+
+                if (isAlreadyAttended) {
+                    setCaptureReady(false);
+                    submitBtn.disabled = true;
+                    updateStatus("Sudah absen hari ini", "secondary", INSTRUCTION_HOLD_MS);
+                    stopScanning();
+                    return;
+                }
+
+                setCaptureReady(false);
+                const landmarks = detections.landmarks;
+                const now = Date.now();
+                if (!livenessStartedAt) livenessStartedAt = now;
+                if (livenessStartedAt && now - livenessStartedAt > LIVENESS_TIMEOUT_MS) {
+                    resetLivenessState();
+                    livenessStartedAt = now;
+                }
+
+                updateStatus(BLINK_INSTRUCTION_TEXT, "warning", INSTRUCTION_HOLD_MS);
+                const avgEAR = getAvgEAR(landmarks);
+                updateBlinkState(avgEAR);
+                if (blinkCount >= REQUIRED_BLINKS) verifyLiveness();
+            }, 100);
         }
 
         function stopScanning() {
@@ -580,6 +689,15 @@
         }
 
         async function captureAndDetect() {
+            if (!isLivenessVerified || !userIdInput.value) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Verifikasi dulu',
+                    text: BLINK_INSTRUCTION_TEXT + ".",
+                });
+                return;
+            }
+
             isProcessing = true;
             stopScanning();
             
@@ -595,31 +713,9 @@
             captureBtn.classList.add('d-none');
             actionButtons.classList.remove('d-none');
             document.getElementById('photo').value = dataUrl;
-            
-            if (!userIdInput.value) {
-                updateStatus("Menganalisa...", "warning");
-                const img = new Image();
-                img.src = dataUrl;
-                img.onload = async () => {
-                    const detection = await faceapi.detectSingleFace(img).withFaceLandmarks().withFaceDescriptor();
-                    if (detection) {
-                        const result = faceMatcher.findBestMatch(detection.descriptor);
-                        if (result.label !== 'unknown') {
-                            const employee = employees.find(e => e.name === result.label);
-                            detectedNameInput.value = employee.name;
-                            userIdInput.value = employee.id;
-                            submitBtn.disabled = false;
-                            updateStatus("Berhasil", "success");
-                        } else {
-                            updateStatus("Gagal Kenali", "danger");
-                        }
-                    }
-                };
-            } else {
-                // If user was already detected by live scanner, just enable the button
-                submitBtn.disabled = false;
-                updateStatus("Identitas Terkonfirmasi", "success");
-            }
+
+            submitBtn.disabled = false;
+            updateStatus("Foto Siap Dikonfirmasi", "success");
         }
 
         function resetCamera() {
@@ -632,12 +728,24 @@
             userIdInput.value = "";
             submitBtn.disabled = true;
             scanLine.style.animationPlayState = 'running';
+            isLivenessVerified = false;
+            isAlreadyAttended = false;
+            candidateEmployee = null;
+            resetMatchState();
+            resetLivenessState(true);
             updateStatus("Siap Memindai", "info");
             startScanning();
         }
 
         function submitAttendance() {
-            if(!userIdInput.value) return;
+            if (!isLivenessVerified || !userIdInput.value) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Verifikasi belum lengkap',
+                    text: BLINK_INSTRUCTION_TEXT + ".",
+                });
+                return;
+            }
             
             Swal.fire({
                 title: 'Menyimpan Absensi',
@@ -646,6 +754,82 @@
                 didOpen: () => Swal.showLoading()
             });
             document.getElementById('attendanceForm').submit();
+        }
+
+        function resetMatchState() {
+            currentMatchLabel = null;
+            stableMatchFrames = 0;
+            missingFaceFrames = 0;
+            unknownFaceFrames = 0;
+            if (!isLivenessVerified) {
+                isAlreadyAttended = false;
+                candidateEmployee = null;
+                detectedNameInput.value = "";
+                userIdInput.value = "";
+                submitBtn.disabled = true;
+                scanLine.style.animationPlayState = 'running';
+                resetLivenessState();
+            }
+        }
+
+        function resetLivenessState(keepStartTime = false) {
+            isLivenessVerified = false;
+            if (!keepStartTime) livenessStartedAt = null;
+            blinkCount = 0;
+            blinkState = 'open';
+            submitBtn.disabled = true;
+            setCaptureReady(false);
+            userIdInput.value = "";
+            scanLine.style.animationPlayState = 'running';
+        }
+
+        function verifyLiveness() {
+            if (!candidateEmployee) return;
+            isLivenessVerified = true;
+            detectedNameInput.value = candidateEmployee.name;
+            userIdInput.value = candidateEmployee.id;
+            submitBtn.disabled = true;
+            setCaptureReady(true);
+            scanLine.style.animationPlayState = 'paused';
+            updateStatus("Wajah Terverifikasi - Silakan Ambil Foto", "success");
+            stopScanning();
+        }
+
+        function getAvgEAR(landmarks) {
+            const leftEye = landmarks.getLeftEye();
+            const rightEye = landmarks.getRightEye();
+            const leftEAR = getEAR(leftEye);
+            const rightEAR = getEAR(rightEye);
+            return (leftEAR + rightEAR) / 2;
+        }
+
+        function getEAR(eye) {
+            const vertical1 = distance(eye[1], eye[5]);
+            const vertical2 = distance(eye[2], eye[4]);
+            const horizontal = distance(eye[0], eye[3]);
+            if (!horizontal) return 0;
+            return (vertical1 + vertical2) / (2 * horizontal);
+        }
+
+        function updateBlinkState(avgEAR) {
+            if (blinkState === 'open' && avgEAR < BLINK_LOW_THRESHOLD) {
+                blinkState = 'closed';
+            } else if (blinkState === 'closed' && avgEAR > BLINK_HIGH_THRESHOLD) {
+                blinkState = 'open';
+                blinkCount += 1;
+            }
+        }
+
+
+        function averagePoint(points) {
+            const sum = points.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+            return { x: sum.x / points.length, y: sum.y / points.length };
+        }
+
+        function distance(a, b) {
+            const dx = a.x - b.x;
+            const dy = a.y - b.y;
+            return Math.sqrt(dx * dx + dy * dy);
         }
     </script>
     @endif
