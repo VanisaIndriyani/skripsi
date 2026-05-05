@@ -610,7 +610,7 @@
         const YAW_TURN_THRESHOLD = 0.18;
         const HEAD_STABLE_FRAMES_REQUIRED = 2;
         const REQUIRE_MOUTH_STEP = false;
-        const MOUTH_STEP_PROBABILITY = 0.35;
+        const MOUTH_STEP_PROBABILITY = 0;
         const MOUTH_OPEN_THRESHOLD = 0.38;
         const MOUTH_CLOSE_THRESHOLD = 0.30;
         const MOUTH_MIN_OPEN_FRAMES = 2;
@@ -988,16 +988,7 @@
         }
 
         function initLivenessChallenge() {
-            const headStep = Math.random() < 0.5 ? 'left' : 'right';
-            const steps = ['blink', headStep];
-            if (REQUIRE_MOUTH_STEP || Math.random() < MOUTH_STEP_PROBABILITY) {
-                steps.push('mouth');
-            }
-            for (let i = steps.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [steps[i], steps[j]] = [steps[j], steps[i]];
-            }
-            livenessSequence = steps;
+            livenessSequence = ['blink'];
             livenessStepIndex = 0;
             headStableFrames = 0;
 
@@ -1108,9 +1099,6 @@
             if (!livenessSequence.length) initLivenessChallenge();
 
             const step = livenessSequence[livenessStepIndex] || 'blink';
-            const instructionText = getCurrentInstructionText();
-            updateStatus(instructionText, "warning", INSTRUCTION_HOLD_MS);
-            if (detectedNameInput) detectedNameInput.value = instructionText;
             setVideoState('recognized');
 
             if (step === 'blink') {
@@ -1349,14 +1337,14 @@
             if (isLivenessVerified) return;
 
             if (isAlreadyAttended) {
-                setCaptureReady(true);
+                setCaptureReady(false);
                 submitBtn.disabled = true;
                 updateStatus("Sudah absen hari ini", "secondary", INSTRUCTION_HOLD_MS);
                 stopScanning();
                 return;
             }
 
-            setCaptureReady(true);
+            setCaptureReady(false);
 
             if (result.distance > MAX_ACCEPT_DISTANCE) {
                 updateStatus("Akurasi rendah, hadapkan wajah ke kamera", "warning", INSTRUCTION_HOLD_MS);
@@ -1379,7 +1367,7 @@
             if (!isLivenessVerified) {
                 updateStatus("", "info");
                 setVideoState('recognized');
-                setCaptureReady(true);
+                setCaptureReady(false);
             }
 
             updateLiveness(detections);
@@ -1387,30 +1375,15 @@
 
         async function captureAndDetect() {
             if (isAlreadyAttended) {
-                safeSwalFire({
-                    icon: 'info',
-                    title: 'Sudah absen',
-                    text: 'Kamu sudah absen hari ini.',
-                });
                 return;
             }
 
             const targetId = recognizedEmployeeId || userIdInput.value;
             if (!targetId) {
-                safeSwalFire({
-                    icon: 'info',
-                    title: 'Belum terdeteksi',
-                    text: 'Arahkan wajah ke kamera dulu.',
-                });
                 return;
             }
 
             if (!isLivenessVerified) {
-                safeSwalFire({
-                    icon: 'info',
-                    title: 'Verifikasi dulu',
-                    text: getCurrentInstructionText(),
-                });
                 return;
             }
 

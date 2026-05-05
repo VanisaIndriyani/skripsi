@@ -18,13 +18,18 @@ class AttendanceController extends Controller
     // Public Kiosk View
     public function kiosk()
     {
+        WorkSession::expireEndedSessions();
+
         // Get active session
         // We look for any session that is marked 'is_active' = true
         // regardless of time constraints for now, to be more flexible.
         // Or we can keep time constraint but ensure timezone is correct.
         
+        $now = Carbon::now();
         $activeSession = WorkSession::where('is_active', true)
-            ->whereDate('date', Carbon::today())
+            ->whereDate('date', $now->toDateString())
+            ->whereTime('start_time', '<=', $now->format('H:i:s'))
+            ->whereTime('end_time', '>=', $now->format('H:i:s'))
             ->first();
 
         $employees = User::select(['id', 'name', 'photo'])
@@ -47,6 +52,8 @@ class AttendanceController extends Controller
     // Public Store (No Auth required, user_id from request)
     public function storePublic(Request $request)
     {
+        WorkSession::expireEndedSessions();
+
         $request->validate([
             'user_id' => 'required|exists:users,id',
             'photo' => 'required',
@@ -81,8 +88,11 @@ class AttendanceController extends Controller
         }
 
         // Find active session
+        $now = Carbon::now();
         $session = WorkSession::where('is_active', true)
-            ->whereDate('date', Carbon::today())
+            ->whereDate('date', $now->toDateString())
+            ->whereTime('start_time', '<=', $now->format('H:i:s'))
+            ->whereTime('end_time', '>=', $now->format('H:i:s'))
             ->first();
 
         if (!$session) {

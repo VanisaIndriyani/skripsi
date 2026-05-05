@@ -4,11 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\WorkSession;
 use Illuminate\Http\Request;
+use Carbon\Carbon;
 
 class WorkSessionController extends Controller
 {
     public function index()
     {
+        WorkSession::expireEndedSessions();
+
         $sessions = WorkSession::withCount('attendances')
             ->orderBy('date', 'desc')
             ->orderBy('start_time', 'desc')
@@ -57,6 +60,19 @@ class WorkSessionController extends Controller
 
     public function toggleStatus(WorkSession $workSession)
     {
+        WorkSession::expireEndedSessions();
+
+        $now = now();
+        if (!$workSession->is_active) {
+            $ended =
+                ($workSession->date && $workSession->date->lt($now->copy()->startOfDay())) ||
+                ($workSession->date && $workSession->date->isSameDay($now) && Carbon::parse($workSession->end_time)->format('H:i:s') <= $now->format('H:i:s'));
+
+            if ($ended) {
+                return redirect()->back()->with('error', 'Sesi sudah selesai. Silakan buat sesi baru jika ingin absensi lagi.');
+            }
+        }
+
         $newStatus = !$workSession->is_active;
 
         // If we are activating this session, deactivate all others first
