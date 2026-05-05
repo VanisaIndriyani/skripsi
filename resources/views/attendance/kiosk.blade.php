@@ -567,6 +567,7 @@
         const livenessValue = document.getElementById('livenessValue');
         const successOverlay = document.getElementById('successOverlay');
         const scanInterface = document.getElementById('scanInterface');
+        const SILENT_NOTIFICATIONS = true;
 
         const attendedUserIds = @json($attendedUserIds ?? []);
 
@@ -636,6 +637,7 @@
 
         setCaptureReady(false);
         setLivenessProgress(0, false);
+        if (statusBadge) statusBadge.style.display = "none";
 
         const OFFICE_LAT = {{ \App\Models\Setting::get('office_latitude', 0) }};
         const OFFICE_LNG = {{ \App\Models\Setting::get('office_longitude', 0) }};
@@ -847,6 +849,14 @@
             const now = Date.now();
             if (!force && now < statusHoldUntil) return;
             if (text === lastStatusText && type === lastStatusType) return;
+            if (SILENT_NOTIFICATIONS) {
+                if (statusBadge) statusBadge.style.display = "none";
+                if (statusSpinner) statusSpinner.classList.add('d-none');
+                lastStatusText = text;
+                lastStatusType = type;
+                statusHoldUntil = holdMs > 0 ? now + holdMs : 0;
+                return;
+            }
             if (text === "") {
                 if (statusBadge) statusBadge.style.display = "none";
                 if (statusSpinner) statusSpinner.classList.add('d-none');
