@@ -407,14 +407,57 @@
         const captureBtn = document.getElementById('captureBtn');
         const actionButtons = document.getElementById('actionButtons');
         const scanLine = document.getElementById('scanLine');
-        
+
+        const attendedUserIds = @json($attendedUserIds ?? []);
+
+        const MODEL_URL = "{{ asset('models') }}";
+
+        const DETECTION_INTERVAL_MS = 110;
+        const VIDEO_INPUT_SIZE = 128;
+        const VIDEO_SCORE_THRESHOLD = 0.5;
+        const PHOTO_INPUT_SIZE = 160;
+
+        const MATCH_THRESHOLD = 0.48;
+        const MAX_ACCEPT_DISTANCE = 0.44;
+        const STABLE_FRAMES_REQUIRED = 2;
+
+        const MIN_DETECTION_SCORE = 0.6;
+        const LIVENESS_TIMEOUT_MS = 12000;
+        const MIN_REQUIRED_BLINKS = 1;
+        const MAX_REQUIRED_BLINKS = 1;
+        const BLINK_LOW_THRESHOLD = 0.21;
+        const BLINK_HIGH_THRESHOLD = 0.23;
+        const YAW_TURN_THRESHOLD = 0.18;
+        const YAW_CENTER_THRESHOLD = 0.08;
+        const HEAD_STABLE_FRAMES_REQUIRED = 2;
+        const FACE_MISSING_RESET_FRAMES = 8;
+        const UNKNOWN_RESET_FRAMES = 8;
+        const INSTRUCTION_HOLD_MS = 900;
+
+        const videoDetectorOptions = new faceapi.TinyFaceDetectorOptions({
+            inputSize: VIDEO_INPUT_SIZE,
+            scoreThreshold: VIDEO_SCORE_THRESHOLD
+        });
+
+        const photoDetectorOptions = new faceapi.TinyFaceDetectorOptions({
+            inputSize: PHOTO_INPUT_SIZE,
+            scoreThreshold: VIDEO_SCORE_THRESHOLD
+        });
+
         let stream = null;
+
+        let isFaceSystemReady = false;
+        let isProcessing = false;
+        let isDetecting = false;
+
         let labeledFaceDescriptors = [];
         let faceMatcher = null;
-        let isFaceSystemReady = false;
-        let isDetecting = false;
-        let detectionInterval = null;
-        let isProcessing = false;
+        let modelsPromise = null;
+        let matcherPromise = null;
+
+        let rafHandle = null;
+        let lastDetectionAt = 0;
+
         let isLivenessVerified = false;
         let isAlreadyAttended = false;
         let candidateEmployee = null;
@@ -430,25 +473,7 @@
         let headStableFrames = 0;
         let missingFaceFrames = 0;
         let unknownFaceFrames = 0;
-
-        const attendedUserIds = @json($attendedUserIds ?? []);
-
-        const MATCH_THRESHOLD = 0.48;
-        const MAX_ACCEPT_DISTANCE = 0.44;
-        const STABLE_FRAMES_REQUIRED = 2;
-        const MIN_FACE_SCORE = 0.45;
-        const MIN_REQUIRED_BLINKS = 1;
-        const MAX_REQUIRED_BLINKS = 2;
-        const LIVENESS_TIMEOUT_MS = 15000;
-        const BLINK_LOW_THRESHOLD = 0.21;
-        const BLINK_HIGH_THRESHOLD = 0.23;
-        const YAW_TURN_THRESHOLD = 0.18;
-        const YAW_CENTER_THRESHOLD = 0.08;
-        const HEAD_STABLE_FRAMES_REQUIRED = 3;
-        const FACE_MISSING_RESET_FRAMES = 10;
-        const UNKNOWN_RESET_FRAMES = 10;
-        const INSTRUCTION_HOLD_MS = 2500;
-        const MODEL_URL = "{{ asset('models') }}";
+        let lastShownName = "";
 
         setCaptureReady(false);
 
@@ -475,40 +500,100 @@
             @endforeach
         ];
 
-        if (typeof faceapi !== 'undefined') loadModels();
+        if (typeof faceapi !== 'undefined') {
+            ensureModelsLoaded();
+            ensureMatcherReady();
+        }
 
-        function loadModels() {
-            Promise.all([
+        function hashString(input) {
+            let hash = 5381;
+            for (let i = 0; i < input.length; i++) {
+                hash = ((hash << 5) + hash) ^ input.charCodeAt(i);
+            }
+            return (hash >>> 0).toString(16);
+        }
+
+        function getDescriptorsCacheKey() {
+            return 'pms_face_descriptors_v2_' + hashString(JSON.stringify(employees));
+        }
+
+        function ensureModelsLoaded() {
+            if (modelsPromise) return modelsPromise;
+            modelsPromise = Promise.all([
                 faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
                 faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
                 faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
-            ]).then(async () => {
-                labeledFaceDescriptors = await loadLabeledImages();
-                if(labeledFaceDescriptors.length > 0) {
-                    faceMatcher = new faceapi.FaceMatcher(labeledFaceDescriptors, MATCH_THRESHOLD);
-                }
+            ]).then(() => {
                 isFaceSystemReady = true;
-            }).catch(err => console.error(err));
+            }).catch(err => {
+                console.error(err);
+                updateStatus("Gagal memuat model", "danger", 0, true);
+            });
+            return modelsPromise;
         }
 
-        async function loadLabeledImages() {
-            return Promise.all(
-                employees.map(async (employee) => {
-                    const descriptions = [];
-                    try {
-                        const img = await faceapi.fetchImage(employee.photo);
-                        const detections = await faceapi
-                            .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: MIN_FACE_SCORE }))
-                            .withFaceLandmarks()
-                            .withFaceDescriptor();
-                        if(detections) {
-                            descriptions.push(detections.descriptor);
-                            return new faceapi.LabeledFaceDescriptors(employee.name, descriptions);
-                        }
-                    } catch(e) { console.error(e); }
-                    return null;
-                })
-            ).then(results => results.filter(r => r !== null));
+        function ensureMatcherReady() {
+            if (matcherPromise) return matcherPromise;
+            matcherPromise = ensureModelsLoaded().then(async () => {
+                labeledFaceDescriptors = await loadLabeledDescriptorsFromCacheOrCompute();
+                if (labeledFaceDescriptors.length > 0) {
+                    faceMatcher = new faceapi.FaceMatcher(labeledFaceDescriptors, MATCH_THRESHOLD);
+                }
+            });
+            return matcherPromise;
+        }
+
+        async function loadLabeledDescriptorsFromCacheOrCompute() {
+            const cacheKey = getDescriptorsCacheKey();
+            try {
+                const cached = localStorage.getItem(cacheKey);
+                if (cached) {
+                    const parsed = JSON.parse(cached);
+                    return parsed.map(item => new faceapi.LabeledFaceDescriptors(
+                        item.label,
+                        item.descriptors.map(d => new Float32Array(d))
+                    ));
+                }
+            } catch (e) {}
+
+            const results = [];
+            for (let i = 0; i < employees.length; i++) {
+                const employee = employees[i];
+                updateStatus(`Menyiapkan data karyawan ${i + 1}/${employees.length}...`, "info", 0, true);
+                const descriptions = [];
+                try {
+                    const img = await faceapi.fetchImage(employee.photo);
+                    const canvas = document.createElement('canvas');
+                    const maxSide = 240;
+                    const ratio = img.width && img.height ? Math.min(1, maxSide / Math.max(img.width, img.height)) : 1;
+                    canvas.width = Math.max(1, Math.round((img.width || maxSide) * ratio));
+                    canvas.height = Math.max(1, Math.round((img.height || maxSide) * ratio));
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                    const detections = await faceapi
+                        .detectSingleFace(canvas, photoDetectorOptions)
+                        .withFaceLandmarks()
+                        .withFaceDescriptor();
+
+                    if (detections && detections.descriptor) {
+                        descriptions.push(detections.descriptor);
+                        results.push(new faceapi.LabeledFaceDescriptors(employee.name, descriptions));
+                    }
+                } catch (e) {
+                    console.error(e);
+                }
+            }
+
+            try {
+                const toCache = results.map(ld => ({
+                    label: ld.label,
+                    descriptors: ld.descriptors.map(d => Array.from(d))
+                }));
+                localStorage.setItem(cacheKey, JSON.stringify(toCache));
+            } catch (e) {}
+
+            return results;
         }
 
         function openScanner() {
@@ -552,13 +637,29 @@
         function startVideo() {
             updateStatus("Inisialisasi...", "warning");
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+                navigator.mediaDevices.getUserMedia({
+                    audio: false,
+                    video: {
+                        facingMode: { ideal: "user" },
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        frameRate: { ideal: 30, max: 30 }
+                    }
+                })
                     .then(s => {
                         stream = s;
                         video.srcObject = stream;
-                        video.play();
-                        updateStatus("Siap Memindai", "info");
-                        video.onplay = () => startScanning();
+                        video.onloadedmetadata = () => {
+                            const playPromise = video.play();
+                            if (playPromise && typeof playPromise.catch === 'function') {
+                                playPromise.catch(() => {});
+                            }
+                        };
+                        video.onplaying = () => {
+                            updateStatus("Siap Memindai", "info", 0, true);
+                            ensureMatcherReady();
+                            startScanning();
+                        };
                     })
                     .catch(err => updateStatus("Kamera Error", "danger"));
             }
@@ -567,6 +668,8 @@
         function stopVideo() {
             if (stream) stream.getTracks().forEach(track => track.stop());
             video.srcObject = null;
+            stream = null;
+            stopScanning();
         }
 
         let statusHoldUntil = 0;
@@ -673,107 +776,139 @@
         }
 
         function startScanning() {
-            if (detectionInterval) clearInterval(detectionInterval);
-            detectionInterval = setInterval(async () => {
-                if (isProcessing) return;
-                if (isDetecting) return;
-                if (!isFaceSystemReady) {
-                    setCaptureReady(false);
-                    if (!isLivenessVerified) updateStatus("Memuat model wajah...", "info", 0, true);
-                    return;
-                }
-                if (!faceMatcher) {
-                    setCaptureReady(false);
-                    if (!isLivenessVerified) updateStatus("Data wajah karyawan belum ada", "warning", 0, true);
-                    return;
-                }
-                isDetecting = true;
-                let detections = null;
-                try {
-                    detections = await faceapi
-                        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 128, scoreThreshold: MIN_FACE_SCORE }))
-                        .withFaceLandmarks()
-                        .withFaceDescriptor();
-                } finally {
-                    isDetecting = false;
-                }
-
-                if (!detections) {
-                    setCaptureReady(false);
-                    missingFaceFrames += 1;
-                    if (missingFaceFrames >= FACE_MISSING_RESET_FRAMES) resetMatchState();
-                    if (!isLivenessVerified) {
-                        if (candidateEmployee) updateStatus(getCurrentInstructionText(), "warning", INSTRUCTION_HOLD_MS);
-                        else updateStatus("Arahkan wajah ke kamera", "info");
-                    }
-                    return;
-                }
-
-                const result = faceMatcher.findBestMatch(detections.descriptor);
-                if (result.label === 'unknown' || result.distance > MATCH_THRESHOLD) {
-                    setCaptureReady(false);
-                    unknownFaceFrames += 1;
-                    if (unknownFaceFrames >= UNKNOWN_RESET_FRAMES) resetMatchState();
-                    if (!candidateEmployee) detectedNameInput.value = "Mencari wajah...";
-                    if (!isLivenessVerified) {
-                        if (candidateEmployee) updateStatus(getCurrentInstructionText(), "warning", INSTRUCTION_HOLD_MS);
-                        else updateStatus("Wajah Tidak Dikenal", "warning");
-                    }
-                    return;
-                }
-
-                missingFaceFrames = 0;
-                unknownFaceFrames = 0;
-
-                if (currentMatchLabel === result.label) {
-                    stableMatchFrames += 1;
-                } else {
-                    currentMatchLabel = result.label;
-                    stableMatchFrames = 1;
-                }
-
-                if (stableMatchFrames < STABLE_FRAMES_REQUIRED) {
-                    if (!isLivenessVerified) updateStatus("Mengunci identitas...", "info");
-                    return;
-                }
-
-                const matchedEmployee = employees.find(e => e.name === result.label);
-                if (!matchedEmployee) {
-                    resetMatchState();
-                    if (!isLivenessVerified) updateStatus("Wajah Tidak Dikenal", "warning");
-                    return;
-                }
-
-                if (!candidateEmployee || candidateEmployee.id !== matchedEmployee.id) {
-                    candidateEmployee = matchedEmployee;
-                    detectedNameInput.value = "";
-                    isAlreadyAttended = attendedUserIds.includes(String(matchedEmployee.id));
-                    initLivenessChallenge();
-                }
-
-                if (isLivenessVerified) return;
-
-                if (isAlreadyAttended) {
-                    setCaptureReady(false);
-                    submitBtn.disabled = true;
-                    updateStatus("Sudah absen hari ini", "secondary", INSTRUCTION_HOLD_MS);
-                    stopScanning();
-                    return;
-                }
-
-                setCaptureReady(false);
-                const landmarks = detections.landmarks;
-                if (result.distance > MAX_ACCEPT_DISTANCE) {
-                    updateStatus("Akurasi rendah, hadapkan wajah ke kamera", "warning", INSTRUCTION_HOLD_MS);
-                    return;
-                }
-
-                updateLiveness(landmarks);
-            }, 100);
+            stopScanning();
+            lastDetectionAt = 0;
+            rafHandle = requestAnimationFrame(scanLoop);
         }
 
         function stopScanning() {
-            if (detectionInterval) clearInterval(detectionInterval);
+            if (rafHandle) cancelAnimationFrame(rafHandle);
+            rafHandle = null;
+        }
+
+        async function scanLoop(ts) {
+            if (!stream) {
+                rafHandle = null;
+                return;
+            }
+
+            if (!lastDetectionAt || ts - lastDetectionAt >= DETECTION_INTERVAL_MS) {
+                lastDetectionAt = ts;
+                await runDetectionFrame();
+            }
+
+            rafHandle = requestAnimationFrame(scanLoop);
+        }
+
+        async function runDetectionFrame() {
+            if (isProcessing) return;
+            if (isDetecting) return;
+
+            if (!isFaceSystemReady) {
+                setCaptureReady(false);
+                if (!isLivenessVerified) updateStatus("Memuat model wajah...", "info", 0, true);
+                ensureModelsLoaded();
+                return;
+            }
+
+            if (!faceMatcher) {
+                setCaptureReady(false);
+                if (!isLivenessVerified) updateStatus("Menyiapkan data karyawan...", "info", 0, true);
+                ensureMatcherReady();
+                return;
+            }
+
+            isDetecting = true;
+            let detections = null;
+            try {
+                detections = await faceapi
+                    .detectSingleFace(video, videoDetectorOptions)
+                    .withFaceLandmarks()
+                    .withFaceDescriptor();
+            } finally {
+                isDetecting = false;
+            }
+
+            if (!detections) {
+                setCaptureReady(false);
+                missingFaceFrames += 1;
+                if (missingFaceFrames >= FACE_MISSING_RESET_FRAMES) resetMatchState();
+                if (!isLivenessVerified) {
+                    detectedNameInput.value = "";
+                    updateStatus("Arahkan wajah ke kamera", "info");
+                }
+                return;
+            }
+
+            if (detections.detection && detections.detection.score < MIN_DETECTION_SCORE) {
+                setCaptureReady(false);
+                updateStatus("Arahkan wajah ke kamera", "warning", INSTRUCTION_HOLD_MS);
+                return;
+            }
+
+            const result = faceMatcher.findBestMatch(detections.descriptor);
+            if (result.label === 'unknown' || result.distance > MATCH_THRESHOLD) {
+                setCaptureReady(false);
+                unknownFaceFrames += 1;
+                if (unknownFaceFrames >= UNKNOWN_RESET_FRAMES) resetMatchState();
+                if (!isLivenessVerified) {
+                    detectedNameInput.value = "";
+                    updateStatus("Wajah Tidak Dikenal", "warning", INSTRUCTION_HOLD_MS);
+                }
+                return;
+            }
+
+            missingFaceFrames = 0;
+            unknownFaceFrames = 0;
+
+            if (currentMatchLabel === result.label) {
+                stableMatchFrames += 1;
+            } else {
+                currentMatchLabel = result.label;
+                stableMatchFrames = 1;
+            }
+
+            if (stableMatchFrames < STABLE_FRAMES_REQUIRED) {
+                if (!isLivenessVerified) updateStatus("Mendeteksi wajah...", "info");
+                return;
+            }
+
+            const matchedEmployee = employees.find(e => e.name === result.label);
+            if (!matchedEmployee) {
+                resetMatchState();
+                if (!isLivenessVerified) updateStatus("Wajah Tidak Dikenal", "warning", INSTRUCTION_HOLD_MS);
+                return;
+            }
+
+            if (matchedEmployee.name !== lastShownName) {
+                detectedNameInput.value = matchedEmployee.name;
+                lastShownName = matchedEmployee.name;
+            }
+
+            if (!candidateEmployee || candidateEmployee.id !== matchedEmployee.id) {
+                candidateEmployee = matchedEmployee;
+                isAlreadyAttended = attendedUserIds.includes(String(matchedEmployee.id));
+                initLivenessChallenge();
+            }
+
+            if (isLivenessVerified) return;
+
+            if (isAlreadyAttended) {
+                setCaptureReady(false);
+                submitBtn.disabled = true;
+                updateStatus("Sudah absen hari ini", "secondary", INSTRUCTION_HOLD_MS);
+                stopScanning();
+                return;
+            }
+
+            setCaptureReady(false);
+
+            if (result.distance > MAX_ACCEPT_DISTANCE) {
+                updateStatus("Akurasi rendah, hadapkan wajah ke kamera", "warning", INSTRUCTION_HOLD_MS);
+                return;
+            }
+
+            updateLiveness(detections.landmarks);
         }
 
         async function captureAndDetect() {
@@ -790,10 +925,14 @@
             stopScanning();
             
             const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
-            const dataUrl = canvas.toDataURL('image/jpeg');
+            const maxWidth = 640;
+            const srcWidth = video.videoWidth;
+            const srcHeight = video.videoHeight;
+            const ratio = srcWidth ? Math.min(1, maxWidth / srcWidth) : 1;
+            canvas.width = Math.round(srcWidth * ratio);
+            canvas.height = Math.round(srcHeight * ratio);
+            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.72);
 
             video.style.display = 'none';
             capturedImage.src = dataUrl;
@@ -849,6 +988,7 @@
             stableMatchFrames = 0;
             missingFaceFrames = 0;
             unknownFaceFrames = 0;
+            lastShownName = "";
             if (!isLivenessVerified) {
                 isAlreadyAttended = false;
                 candidateEmployee = null;
