@@ -440,6 +440,8 @@
         const INSTRUCTION_HOLD_MS = 2500;
         const BLINK_INSTRUCTION_TEXT = `Kedip ${REQUIRED_BLINKS}x untuk verifikasi`;
         const MODEL_URL = "{{ asset('models') }}";
+        const CAMERA_START_TIMEOUT_MS = 7000;
+        let cameraStartTimeoutHandle = null;
 
         setCaptureReady(false);
 
@@ -585,27 +587,60 @@
             resetCamera();
         }
 
+        function handleTapToStartCamera() {
+            if (stream) return;
+            if (isProcessing) return;
+            startVideo();
+        }
+
         function startVideo() {
             updateStatus("Inisialisasi...", "warning");
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+                if (cameraStartTimeoutHandle) clearTimeout(cameraStartTimeoutHandle);
+
+                updateStatus("Meminta izin kamera...", "warning", 0, true);
+
+                cameraStartTimeoutHandle = setTimeout(() => {
+                    if (!stream) updateStatus("Ketuk layar untuk mulai kamera", "warning", 0, true);
+                }, CAMERA_START_TIMEOUT_MS);
+
+                document.getElementById('scanInterface').addEventListener('click', handleTapToStartCamera, { passive: true });
+
+                navigator.mediaDevices.getUserMedia({
+                    audio: false,
+                    video: {
+                        facingMode: { ideal: "user" },
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        frameRate: { ideal: 24, max: 30 }
+                    }
+                })
                     .then(s => {
                         stream = s;
                         video.srcObject = stream;
-                        video.play();
-                        updateStatus("Siap Memindai", "info");
-                        video.onplay = async () => {
+                        video.onloadedmetadata = () => {
+                            const playPromise = video.play();
+                            if (playPromise && typeof playPromise.catch === 'function') {
+                                playPromise.catch(() => {});
+                            }
+                        };
+
+                        video.onplaying = async () => {
+                            if (cameraStartTimeoutHandle) clearTimeout(cameraStartTimeoutHandle);
+                            updateStatus("Siap Memindai", "info");
+                            document.getElementById('scanInterface').removeEventListener('click', handleTapToStartCamera);
                             await ensureFaceSystemLoaded();
                             startScanning();
                         };
                     })
-                    .catch(err => updateStatus("Kamera Error", "danger"));
+                    .catch(() => updateStatus("Kamera Error", "danger"));
             }
         }
 
         function stopVideo() {
             if (stream) stream.getTracks().forEach(track => track.stop());
             video.srcObject = null;
+            document.getElementById('scanInterface').removeEventListener('click', handleTapToStartCamera);
         }
 
         let statusHoldUntil = 0;
