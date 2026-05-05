@@ -44,6 +44,7 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     // Work Sessions
     Route::get('/admin/sessions', [WorkSessionController::class, 'index'])->name('admin.sessions');
     Route::post('/admin/sessions', [WorkSessionController::class, 'store'])->name('admin.sessions.store');
+    Route::delete('/admin/sessions/bulk', [WorkSessionController::class, 'bulkDestroy'])->name('admin.sessions.bulkDestroy');
     Route::patch('/admin/sessions/{workSession}/toggle', [WorkSessionController::class, 'toggleStatus'])->name('admin.sessions.toggle');
     Route::delete('/admin/sessions/{workSession}', [WorkSessionController::class, 'destroy'])->name('admin.sessions.destroy');
     Route::get('/admin/sessions/{workSession}', [WorkSessionController::class, 'show'])->name('admin.sessions.show');

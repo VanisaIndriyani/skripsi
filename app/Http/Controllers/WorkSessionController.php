@@ -80,4 +80,21 @@ class WorkSessionController extends Controller
         $workSession->delete();
         return redirect()->back()->with('success', 'Sesi kerja berhasil dihapus.');
     }
+
+    public function bulkDestroy(Request $request)
+    {
+        $validated = $request->validate([
+            'session_ids' => 'required|array|min:1',
+            'session_ids.*' => 'integer|exists:work_sessions,id',
+        ]);
+
+        $ids = $validated['session_ids'];
+        $count = WorkSession::whereIn('id', $ids)->count();
+
+        WorkSession::whereIn('id', $ids)->delete();
+
+        $this->logActivity('Hapus Banyak Sesi', 'Admin menghapus ' . $count . ' sesi kerja.');
+
+        return redirect()->back()->with('success', 'Berhasil menghapus ' . $count . ' sesi kerja.');
+    }
 }

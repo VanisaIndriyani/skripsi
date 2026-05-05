@@ -18,7 +18,16 @@
                 </div>
             </div>
             <div class="col-md-6 text-md-end mt-3 mt-md-0">
-                <span class="text-muted small">Total: <strong>{{ $sessions->total() }}</strong> Sesi</span>
+                <div class="d-flex justify-content-md-end justify-content-start align-items-center gap-2">
+                    <form id="bulkDeleteSessionsForm" action="{{ route('admin.sessions.bulkDestroy') }}" method="POST" class="delete-form m-0">
+                        @csrf
+                        @method('DELETE')
+                        <button type="button" id="bulkDeleteBtn" class="btn btn-outline-danger rounded-pill px-3" disabled>
+                            <i class="fas fa-trash me-2"></i> Hapus Terpilih
+                        </button>
+                    </form>
+                    <span class="text-muted small">Total: <strong>{{ $sessions->total() }}</strong> Sesi</span>
+                </div>
             </div>
         </div>
     </div>
@@ -38,6 +47,9 @@
             <table class="table table-hover align-middle mb-0" id="sessionTable">
                 <thead class="table-light">
                     <tr>
+                        <th class="ps-4" style="width: 44px;">
+                            <input class="form-check-input" type="checkbox" id="selectAllSessions">
+                        </th>
                         <th class="ps-4">Tanggal & Waktu</th>
                         <th>Informasi Sesi</th>
                         <th>Peserta</th>
@@ -48,6 +60,9 @@
                 <tbody>
                     @forelse($sessions as $session)
                     <tr>
+                        <td class="ps-4">
+                            <input class="form-check-input session-checkbox" type="checkbox" value="{{ $session->id }}">
+                        </td>
                         <td class="ps-4">
                             <div class="fw-bold text-dark">{{ $session->date->format('d M Y') }}</div>
                             <small class="text-muted">
@@ -108,7 +123,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="5" class="text-center py-5 text-muted">
+                        <td colspan="6" class="text-center py-5 text-muted">
                             <img src="https://illustrations.popsy.co/gray/surr-list-is-empty.svg" width="150" class="mb-3 opacity-50">
                             <p>Belum ada sesi kerja.</p>
                         </td>
@@ -206,6 +221,67 @@
             }
         });
     });
+
+    const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+    const bulkDeleteForm = document.getElementById('bulkDeleteSessionsForm');
+    const selectAllSessions = document.getElementById('selectAllSessions');
+
+    function getSelectedSessionIds() {
+        return Array.from(document.querySelectorAll('.session-checkbox:checked')).map(cb => cb.value);
+    }
+
+    function syncBulkDeleteUi() {
+        const selected = getSelectedSessionIds();
+        if (bulkDeleteBtn) {
+            bulkDeleteBtn.disabled = selected.length === 0;
+            bulkDeleteBtn.innerHTML = selected.length
+                ? `<i class="fas fa-trash me-2"></i> Hapus Terpilih (${selected.length})`
+                : `<i class="fas fa-trash me-2"></i> Hapus Terpilih`;
+        }
+        if (selectAllSessions) {
+            const all = document.querySelectorAll('.session-checkbox');
+            const checked = document.querySelectorAll('.session-checkbox:checked');
+            selectAllSessions.checked = all.length > 0 && checked.length === all.length;
+            selectAllSessions.indeterminate = checked.length > 0 && checked.length < all.length;
+        }
+    }
+
+    if (selectAllSessions) {
+        selectAllSessions.addEventListener('change', function () {
+            document.querySelectorAll('.session-checkbox').forEach(cb => {
+                cb.checked = selectAllSessions.checked;
+            });
+            syncBulkDeleteUi();
+        });
+    }
+
+    document.addEventListener('change', function (e) {
+        if (e.target && e.target.classList && e.target.classList.contains('session-checkbox')) {
+            syncBulkDeleteUi();
+        }
+    });
+
+    if (bulkDeleteBtn && bulkDeleteForm) {
+        bulkDeleteBtn.addEventListener('click', function (e) {
+            const selected = getSelectedSessionIds();
+            if (selected.length === 0) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+
+            bulkDeleteForm.querySelectorAll('input[name="session_ids[]"]').forEach(el => el.remove());
+            selected.forEach(id => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'session_ids[]';
+                input.value = id;
+                bulkDeleteForm.appendChild(input);
+            });
+        });
+    }
+
+    syncBulkDeleteUi();
 
     // Show Attendees
     function showAttendees(sessionId) {
