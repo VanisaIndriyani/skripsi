@@ -600,13 +600,19 @@
         const MIN_DETECTION_SCORE = 0.5;
         const LIVENESS_TIMEOUT_MS = 10000;
         const MIN_LIVENESS_DURATION_MS = 1500;
-        const REQUIRED_BLINKS = 2;
+        const REQUIRED_BLINKS = 1;
         const BLINK_LOW_THRESHOLD = 0.20;
         const BLINK_HIGH_THRESHOLD = 0.24;
-        const BLINK_MIN_CLOSED_FRAMES = 2;
-        const BLINK_MIN_OPEN_FRAMES = 2;
-        const BLINK_MIN_INTERVAL_MS = 250;
-        const BLINK_MAX_CLOSED_FRAMES = 18;
+        const BLINK_MIN_CLOSED_FRAMES = 1;
+        const BLINK_MIN_OPEN_FRAMES = 1;
+        const BLINK_MIN_INTERVAL_MS = 150;
+        const BLINK_MAX_CLOSED_FRAMES = 28;
+        const EAR_BASELINE_MIN_SAMPLES = 8;
+        const EAR_BASELINE_MAX_SAMPLES = 18;
+        const EAR_OPEN_MIN = 0.14;
+        const EAR_OPEN_MAX = 0.40;
+        const EYE_MOVE_ASYM_THRESHOLD = 0.03;
+        const EYE_MOVE_REQUIRED_FRAMES = 2;
         const YAW_TURN_THRESHOLD = 0.18;
         const HEAD_STABLE_FRAMES_REQUIRED = 2;
         const REQUIRE_MOUTH_STEP = false;
@@ -615,8 +621,8 @@
         const MOUTH_CLOSE_THRESHOLD = 0.30;
         const MOUTH_MIN_OPEN_FRAMES = 2;
         const MOUTH_MIN_CLOSED_FRAMES = 2;
-        const FACE_STABLE_CENTER_NORM_DELTA = 0.05;
-        const FACE_STABLE_SIZE_DELTA = 0.06;
+        const FACE_STABLE_CENTER_NORM_DELTA = 0.09;
+        const FACE_STABLE_SIZE_DELTA = 0.12;
         const FACE_MISSING_RESET_FRAMES = 8;
         const UNKNOWN_RESET_FRAMES = 8;
         const INSTRUCTION_HOLD_MS = 900;
@@ -658,6 +664,10 @@
         let earOpenFrames = 0;
         let lastBlinkAt = 0;
         let requiredBlinks = REQUIRED_BLINKS;
+        let eyeMoveFrames = 0;
+        let earBaseline = null;
+        let earBaselineSum = 0;
+        let earBaselineSamples = 0;
         let livenessSequence = [];
         let livenessStepIndex = 0;
         let headStableFrames = 0;
@@ -998,6 +1008,10 @@
             earClosedFrames = 0;
             earOpenFrames = 0;
             lastBlinkAt = 0;
+            eyeMoveFrames = 0;
+            earBaseline = null;
+            earBaselineSum = 0;
+            earBaselineSamples = 0;
             mouthState = 'closed';
             mouthOpenFrames = 0;
             mouthClosedFrames = 0;
@@ -1102,18 +1116,24 @@
             setVideoState('detecting');
 
             if (step === 'blink') {
-                const avgEAR = getAvgEAR(landmarks);
+                const ears = getEyeEARs(landmarks);
+                const avgEAR = ears.avgEAR;
                 const stable = isFaceStable(detections.detection?.box);
                 const yaw = getYaw(landmarks);
-                updateBlinkState(avgEAR, stable, yaw, now);
-                if (blinkCount >= requiredBlinks) {
+                updateEarBaseline(avgEAR, stable, yaw);
+                const thresholds = getBlinkThresholds();
+                updateBlinkState(avgEAR, stable, yaw, now, thresholds.low, thresholds.high);
+                updateEyeMoveState(ears.leftEAR, ears.rightEAR, stable, yaw);
+                if (blinkCount >= requiredBlinks || eyeMoveFrames >= EYE_MOVE_REQUIRED_FRAMES) {
                     livenessStepIndex += 1;
                     headStableFrames = 0;
                     mouthState = 'closed';
                     mouthOpenFrames = 0;
                     mouthClosedFrames = 0;
                 }
-                const stepProgress = Math.min(1, blinkCount / requiredBlinks);
+                const blinkProgress = Math.min(1, blinkCount / Math.max(1, requiredBlinks));
+                const moveProgress = Math.min(1, eyeMoveFrames / Math.max(1, EYE_MOVE_REQUIRED_FRAMES));
+                const stepProgress = Math.max(blinkProgress, moveProgress);
                 const overall = ((livenessStepIndex + stepProgress) / Math.max(1, livenessSequence.length)) * 100;
                 setLivenessProgress(overall, false);
             } else if (step === 'mouth') {
@@ -1372,7 +1392,11 @@
             }
 
             updateLiveness(detections);
-            if (!isLivenessVerified && detectedNameInput) detectedNameInput.value = `Kedip ${Math.min(blinkCount, REQUIRED_BLINKS)}/${REQUIRED_BLINKS}`;
+            if (!isLivenessVerified && detectedNameInput) {
+                const blinkPart = `Kedip ${Math.min(blinkCount, REQUIRED_BLINKS)}/${REQUIRED_BLINKS}`;
+                const movePart = `Mata ${Math.min(eyeMoveFrames, EYE_MOVE_REQUIRED_FRAMES)}/${EYE_MOVE_REQUIRED_FRAMES}`;
+                detectedNameInput.value = `${blinkPart} • ${movePart}`;
+            }
         }
 
         async function captureAndDetect() {
@@ -1484,6 +1508,10 @@
             earOpenFrames = 0;
             lastBlinkAt = 0;
             requiredBlinks = REQUIRED_BLINKS;
+            eyeMoveFrames = 0;
+            earBaseline = null;
+            earBaselineSum = 0;
+            earBaselineSamples = 0;
             livenessChallengeStartedAt = null;
             livenessSequence = [];
             livenessStepIndex = 0;
@@ -1514,12 +1542,12 @@
             stopScanning();
         }
 
-        function getAvgEAR(landmarks) {
+        function getEyeEARs(landmarks) {
             const leftEye = landmarks.getLeftEye();
             const rightEye = landmarks.getRightEye();
             const leftEAR = getEAR(leftEye);
             const rightEAR = getEAR(rightEye);
-            return (leftEAR + rightEAR) / 2;
+            return { leftEAR, rightEAR, avgEAR: (leftEAR + rightEAR) / 2 };
         }
 
         function getEAR(eye) {
@@ -1530,22 +1558,57 @@
             return (vertical1 + vertical2) / (2 * horizontal);
         }
 
-        function updateBlinkState(avgEAR, isStableFrame, yaw, now) {
+        function updateEarBaseline(avgEAR, isStableFrame, yaw) {
+            if (!isStableFrame) return;
+            if (Math.abs(yaw) > 0.18) return;
+            if (avgEAR < EAR_OPEN_MIN || avgEAR > EAR_OPEN_MAX) return;
+            if (earBaselineSamples >= EAR_BASELINE_MAX_SAMPLES) return;
+
+            earBaselineSum += avgEAR;
+            earBaselineSamples += 1;
+            if (earBaselineSamples >= EAR_BASELINE_MIN_SAMPLES) {
+                earBaseline = earBaselineSum / earBaselineSamples;
+            }
+        }
+
+        function getBlinkThresholds() {
+            if (earBaselineSamples >= EAR_BASELINE_MIN_SAMPLES && earBaseline) {
+                const low = Math.max(0.12, Math.min(0.28, earBaseline * 0.72));
+                const high = Math.max(low + 0.02, Math.min(0.34, earBaseline * 0.88));
+                return { low, high };
+            }
+            return { low: BLINK_LOW_THRESHOLD, high: BLINK_HIGH_THRESHOLD };
+        }
+
+        function updateEyeMoveState(leftEAR, rightEAR, isStableFrame, yaw) {
+            if (!isStableFrame) {
+                eyeMoveFrames = 0;
+                return;
+            }
+            if (Math.abs(yaw) > 0.18) {
+                eyeMoveFrames = 0;
+                return;
+            }
+            const asym = Math.abs(leftEAR - rightEAR);
+            if (asym >= EYE_MOVE_ASYM_THRESHOLD) eyeMoveFrames += 1;
+            else eyeMoveFrames = 0;
+        }
+
+        function updateBlinkState(avgEAR, isStableFrame, yaw, now, lowThreshold, highThreshold) {
             if (!isStableFrame) {
                 earClosedFrames = 0;
                 earOpenFrames = 0;
-                blinkState = 'open';
                 return;
             }
 
-            if (Math.abs(yaw) > 0.12) {
+            if (Math.abs(yaw) > 0.22) {
                 earClosedFrames = 0;
                 earOpenFrames = 0;
                 blinkState = 'open';
                 return;
             }
 
-            if (avgEAR < BLINK_LOW_THRESHOLD) {
+            if (avgEAR < lowThreshold) {
                 earClosedFrames += 1;
                 earOpenFrames = 0;
                 blinkState = 'closed';
@@ -1557,7 +1620,7 @@
                 return;
             }
 
-            if (avgEAR > BLINK_HIGH_THRESHOLD) {
+            if (avgEAR > highThreshold) {
                 earOpenFrames += 1;
                 if (blinkState === 'closed' && earClosedFrames >= BLINK_MIN_CLOSED_FRAMES && earOpenFrames >= BLINK_MIN_OPEN_FRAMES) {
                     if (!lastBlinkAt || now - lastBlinkAt >= BLINK_MIN_INTERVAL_MS) {
