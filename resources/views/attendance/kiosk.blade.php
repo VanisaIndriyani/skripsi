@@ -601,11 +601,11 @@
 
         const MATCH_THRESHOLD = 0.48;
         const MAX_ACCEPT_DISTANCE = 0.52;
-        const STABLE_FRAMES_REQUIRED = 2;
+        const STABLE_FRAMES_REQUIRED = 1;
 
         const MIN_DETECTION_SCORE = 0.5;
         const LIVENESS_TIMEOUT_MS = 10000;
-        const MIN_LIVENESS_DURATION_MS = 1500;
+        const MIN_LIVENESS_DURATION_MS = 450;
         const REQUIRED_BLINKS = 1;
         const BLINK_LOW_THRESHOLD = 0.20;
         const BLINK_HIGH_THRESHOLD = 0.24;
@@ -613,8 +613,8 @@
         const BLINK_MIN_OPEN_FRAMES = 1;
         const BLINK_MIN_INTERVAL_MS = 150;
         const BLINK_MAX_CLOSED_FRAMES = 28;
-        const EAR_BASELINE_MIN_SAMPLES = 8;
-        const EAR_BASELINE_MAX_SAMPLES = 18;
+        const EAR_BASELINE_MIN_SAMPLES = 4;
+        const EAR_BASELINE_MAX_SAMPLES = 12;
         const EAR_OPEN_MIN = 0.14;
         const EAR_OPEN_MAX = 0.40;
         const EYE_MOVE_ASYM_THRESHOLD = 0.03;
@@ -1362,9 +1362,9 @@
                 return;
             }
 
-            if (!isLivenessVerified) {
-                if (detectedNameInput) detectedNameInput.value = "";
-                lastShownName = "";
+            if (!isLivenessVerified && matchedEmployee.name !== lastShownName) {
+                if (detectedNameInput) detectedNameInput.value = matchedEmployee.name;
+                lastShownName = matchedEmployee.name;
             }
 
             if (!candidateEmployee || candidateEmployee.id !== matchedEmployee.id) {
@@ -1399,7 +1399,7 @@
                     updateStatus("Posisikan wajah di dalam lingkaran", "warning", INSTRUCTION_HOLD_MS);
                 }
                 setVideoState('detecting');
-                if (detectedNameInput) detectedNameInput.value = "...";
+                if (detectedNameInput) detectedNameInput.value = `${recognizedEmployeeName || matchedEmployee.name} • Posisikan di lingkaran`;
                 return;
             }
 
@@ -1410,10 +1410,11 @@
 
             updateLiveness(detections);
             if (!isLivenessVerified && detectedNameInput) {
+                const namePart = recognizedEmployeeName || matchedEmployee.name;
                 const blinkPart = `Kedip ${Math.min(blinkCount, REQUIRED_BLINKS)}/${REQUIRED_BLINKS}`;
                 const movePart = `Lirik ${Math.min(eyeMoveEventCount, EYE_MOVE_REQUIRED_EVENTS)}/${EYE_MOVE_REQUIRED_EVENTS}`;
                 const gazePart = `Natap ${Math.min(gazeFrames, GAZE_REQUIRED_FRAMES)}/${GAZE_REQUIRED_FRAMES}`;
-                detectedNameInput.value = `${blinkPart} • ${movePart} • ${gazePart}`;
+                detectedNameInput.value = `${namePart} • ${blinkPart} • ${movePart} • ${gazePart}`;
             }
         }
 
@@ -1432,9 +1433,10 @@
             if (!isLivenessVerified) {
                 if (detectedNameInput) {
                     const blinkPart = `Kedip ${Math.min(blinkCount, REQUIRED_BLINKS)}/${REQUIRED_BLINKS}`;
-                    const movePart = `Mata ${Math.min(eyeMoveFrames, EYE_MOVE_REQUIRED_FRAMES)}/${EYE_MOVE_REQUIRED_FRAMES}`;
+                    const movePart = `Lirik ${Math.min(eyeMoveEventCount, EYE_MOVE_REQUIRED_EVENTS)}/${EYE_MOVE_REQUIRED_EVENTS}`;
                     const gazePart = `Natap ${Math.min(gazeFrames, GAZE_REQUIRED_FRAMES)}/${GAZE_REQUIRED_FRAMES}`;
-                    detectedNameInput.value = `${blinkPart} • ${movePart} • ${gazePart}`;
+                    const namePart = recognizedEmployeeName || detectedNameInput.value || "";
+                    detectedNameInput.value = [namePart, blinkPart, movePart, gazePart].filter(Boolean).join(' • ');
                 }
                 return;
             }
