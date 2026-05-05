@@ -9,7 +9,10 @@ class WorkSessionController extends Controller
 {
     public function index()
     {
-        $sessions = WorkSession::withCount('attendances')->orderBy('date', 'desc')->orderBy('start_time', 'desc')->get();
+        $sessions = WorkSession::withCount('attendances')
+            ->orderBy('date', 'desc')
+            ->orderBy('start_time', 'desc')
+            ->paginate(10);
         return view('admin.sessions.index', compact('sessions'));
     }
 

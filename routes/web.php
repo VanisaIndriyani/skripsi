@@ -13,6 +13,11 @@ use App\Http\Controllers\ReportController;
 Route::get('/', [AttendanceController::class, 'kiosk'])->name('attendance.kiosk');
 Route::post('/attendance/public', [AttendanceController::class, 'storePublic'])->name('attendance.storePublic');
 
+Route::get('/uiux', function () {
+    abort_unless(config('app.debug'), 404);
+    return view('uiux');
+})->name('uiux.preview');
+
 // Auth Routes
 Route::get('/login', [AuthController::class, 'login'])->name('login');
 Route::post('/authenticate', [AuthController::class, 'authenticate'])->name('authenticate');

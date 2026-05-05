@@ -65,7 +65,7 @@ class AdminController extends Controller
     // Employee CRUD
     public function employees()
     {
-        $employees = User::where('role', 'employee')->orderBy('name')->get();
+        $employees = User::where('role', 'employee')->orderBy('name')->paginate(10);
         return view('admin.employees.index', compact('employees'));
     }
 
@@ -144,7 +144,7 @@ class AdminController extends Controller
     // Attendance Monitoring
     public function attendances()
     {
-        $attendances = Attendance::with('user')->orderBy('date', 'desc')->get();
+        $attendances = Attendance::with('user')->orderBy('date', 'desc')->paginate(15);
         return view('admin.attendances.index', compact('attendances'));
     }
 

@@ -18,7 +18,7 @@
                 </div>
             </div>
             <div class="col-md-6 text-md-end mt-3 mt-md-0">
-                <span class="text-muted small">Total: <strong>{{ $employees->count() }}</strong> Karyawan</span>
+                <span class="text-muted small">Total: <strong>{{ $employees->total() }}</strong> Karyawan</span>
             </div>
         </div>
     </div>
@@ -137,6 +137,9 @@
                     @endforelse
                 </tbody>
             </table>
+        </div>
+        <div class="d-flex justify-content-end px-4 py-3">
+            {{ $employees->links() }}
         </div>
     </div>
 </div>

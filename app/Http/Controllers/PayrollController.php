@@ -18,7 +18,7 @@ class PayrollController extends Controller
             ->orderBy('start_date', 'desc')
             ->orderBy('year', 'desc')
             ->orderBy('month', 'desc')
-            ->get();
+            ->paginate(10);
 
         // Calculate session count for each payroll
         foreach ($payrolls as $payroll) {

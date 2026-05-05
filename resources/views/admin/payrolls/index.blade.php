@@ -24,7 +24,7 @@
                 <select id="periodFilter" class="form-select bg-light">
                     <option value="">Semua Periode</option>
                     @php
-                        $periods = $payrolls->map(function($p) {
+                        $periods = $payrolls->getCollection()->map(function($p) {
                             if($p->start_date && $p->end_date) {
                                 return \Carbon\Carbon::parse($p->start_date)->format('d M') . ' - ' . \Carbon\Carbon::parse($p->end_date)->format('d M Y');
                             }
@@ -38,7 +38,7 @@
             </div>
             <div class="col-md-3 text-md-end mt-3 mt-md-0">
                 <span class="badge bg-light text-dark border py-2 px-3">
-                    <i class="fas fa-database me-1 text-gold"></i> Total: <strong>{{ $payrolls->count() }}</strong> Data
+                    <i class="fas fa-database me-1 text-gold"></i> Total: <strong>{{ $payrolls->total() }}</strong> Data
                 </span>
             </div>
         </div>
@@ -127,6 +127,9 @@
                     @endforelse
                 </tbody>
             </table>
+        </div>
+        <div class="d-flex justify-content-end px-4 py-3">
+            {{ $payrolls->links() }}
         </div>
     </div>
 </div>
