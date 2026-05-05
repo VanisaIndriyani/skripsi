@@ -976,12 +976,6 @@
             }
         }
 
-
-        function averagePoint(points) {
-            const sum = points.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
-            return { x: sum.x / points.length, y: sum.y / points.length };
-        }
-
         function distance(a, b) {
             const dx = a.x - b.x;
             const dy = a.y - b.y;
