@@ -613,6 +613,8 @@
         const EAR_OPEN_MAX = 0.40;
         const EYE_MOVE_ASYM_THRESHOLD = 0.03;
         const EYE_MOVE_REQUIRED_FRAMES = 2;
+        const GAZE_YAW_MAX = 0.12;
+        const GAZE_REQUIRED_FRAMES = 10;
         const YAW_TURN_THRESHOLD = 0.18;
         const HEAD_STABLE_FRAMES_REQUIRED = 2;
         const REQUIRE_MOUTH_STEP = false;
@@ -665,6 +667,7 @@
         let lastBlinkAt = 0;
         let requiredBlinks = REQUIRED_BLINKS;
         let eyeMoveFrames = 0;
+        let gazeFrames = 0;
         let earBaseline = null;
         let earBaselineSum = 0;
         let earBaselineSamples = 0;
@@ -1009,6 +1012,7 @@
             earOpenFrames = 0;
             lastBlinkAt = 0;
             eyeMoveFrames = 0;
+            gazeFrames = 0;
             earBaseline = null;
             earBaselineSum = 0;
             earBaselineSamples = 0;
@@ -1124,7 +1128,8 @@
                 const thresholds = getBlinkThresholds();
                 updateBlinkState(avgEAR, stable, yaw, now, thresholds.low, thresholds.high);
                 updateEyeMoveState(ears.leftEAR, ears.rightEAR, stable, yaw);
-                if (blinkCount >= requiredBlinks || eyeMoveFrames >= EYE_MOVE_REQUIRED_FRAMES) {
+                updateGazeState(avgEAR, stable, yaw, thresholds.high);
+                if (blinkCount >= requiredBlinks || eyeMoveFrames >= EYE_MOVE_REQUIRED_FRAMES || gazeFrames >= GAZE_REQUIRED_FRAMES) {
                     livenessStepIndex += 1;
                     headStableFrames = 0;
                     mouthState = 'closed';
@@ -1133,7 +1138,8 @@
                 }
                 const blinkProgress = Math.min(1, blinkCount / Math.max(1, requiredBlinks));
                 const moveProgress = Math.min(1, eyeMoveFrames / Math.max(1, EYE_MOVE_REQUIRED_FRAMES));
-                const stepProgress = Math.max(blinkProgress, moveProgress);
+                const gazeProgress = Math.min(1, gazeFrames / Math.max(1, GAZE_REQUIRED_FRAMES));
+                const stepProgress = Math.max(blinkProgress, moveProgress, gazeProgress);
                 const overall = ((livenessStepIndex + stepProgress) / Math.max(1, livenessSequence.length)) * 100;
                 setLivenessProgress(overall, false);
             } else if (step === 'mouth') {
@@ -1395,7 +1401,8 @@
             if (!isLivenessVerified && detectedNameInput) {
                 const blinkPart = `Kedip ${Math.min(blinkCount, REQUIRED_BLINKS)}/${REQUIRED_BLINKS}`;
                 const movePart = `Mata ${Math.min(eyeMoveFrames, EYE_MOVE_REQUIRED_FRAMES)}/${EYE_MOVE_REQUIRED_FRAMES}`;
-                detectedNameInput.value = `${blinkPart} • ${movePart}`;
+                const gazePart = `Natap ${Math.min(gazeFrames, GAZE_REQUIRED_FRAMES)}/${GAZE_REQUIRED_FRAMES}`;
+                detectedNameInput.value = `${blinkPart} • ${movePart} • ${gazePart}`;
             }
         }
 
@@ -1509,6 +1516,7 @@
             lastBlinkAt = 0;
             requiredBlinks = REQUIRED_BLINKS;
             eyeMoveFrames = 0;
+            gazeFrames = 0;
             earBaseline = null;
             earBaselineSum = 0;
             earBaselineSamples = 0;
@@ -1592,6 +1600,22 @@
             const asym = Math.abs(leftEAR - rightEAR);
             if (asym >= EYE_MOVE_ASYM_THRESHOLD) eyeMoveFrames += 1;
             else eyeMoveFrames = 0;
+        }
+
+        function updateGazeState(avgEAR, isStableFrame, yaw, openThreshold) {
+            if (!isStableFrame) {
+                gazeFrames = 0;
+                return;
+            }
+            if (Math.abs(yaw) > GAZE_YAW_MAX) {
+                gazeFrames = 0;
+                return;
+            }
+            if (avgEAR <= openThreshold) {
+                gazeFrames = 0;
+                return;
+            }
+            gazeFrames += 1;
         }
 
         function updateBlinkState(avgEAR, isStableFrame, yaw, now, lowThreshold, highThreshold) {
