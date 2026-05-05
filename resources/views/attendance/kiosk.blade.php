@@ -662,7 +662,6 @@
 
         if (typeof faceapi !== 'undefined') {
             ensureModelsLoaded();
-            ensureMatcherReady();
         }
 
         function hashString(input) {
@@ -765,6 +764,11 @@
             });
 
             if (navigator.geolocation) {
+                scanInterface.style.display = 'flex';
+                requestAnimationFrame(() => scanInterface.classList.add('is-open'));
+                updateStatus("Memulai kamera...", "info", 0, true);
+                startVideo();
+
                 navigator.geolocation.getCurrentPosition(position => {
                     const lat = position.coords.latitude;
                     const lng = position.coords.longitude;
@@ -774,16 +778,15 @@
                     
                     if (distance > MAX_RADIUS) {
                         Swal.fire({ icon: 'error', title: 'Diluar Jangkauan', text: `Jarak Anda ${Math.round(distance)}m. Maksimum radius ${MAX_RADIUS}m.` });
+                        closeScanner();
                     } else {
                         Swal.close();
                         document.getElementById('landingPage').classList.add('d-none');
-                        scanInterface.style.display = 'flex';
-                        requestAnimationFrame(() => scanInterface.classList.add('is-open'));
-                        startVideo();
                     }
                 }, error => {
                     Swal.fire({ icon: 'error', title: 'GPS Gagal', text: 'Mohon aktifkan izin lokasi di browser Anda.' });
-                }, { enableHighAccuracy: true, timeout: 5000 });
+                    closeScanner();
+                }, { enableHighAccuracy: false, timeout: 3000, maximumAge: 60000 });
             }
         }
 
