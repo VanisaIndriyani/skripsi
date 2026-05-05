@@ -603,8 +603,14 @@
         const REQUIRED_BLINKS = 2;
         const BLINK_LOW_THRESHOLD = 0.20;
         const BLINK_HIGH_THRESHOLD = 0.24;
+        const BLINK_MIN_CLOSED_FRAMES = 2;
+        const BLINK_MIN_OPEN_FRAMES = 2;
+        const BLINK_MIN_INTERVAL_MS = 250;
+        const BLINK_MAX_CLOSED_FRAMES = 18;
         const YAW_TURN_THRESHOLD = 0.18;
         const HEAD_STABLE_FRAMES_REQUIRED = 2;
+        const FACE_STABLE_CENTER_NORM_DELTA = 0.05;
+        const FACE_STABLE_SIZE_DELTA = 0.06;
         const FACE_MISSING_RESET_FRAMES = 8;
         const UNKNOWN_RESET_FRAMES = 8;
         const INSTRUCTION_HOLD_MS = 900;
@@ -642,6 +648,9 @@
         let livenessChallengeStartedAt = null;
         let blinkCount = 0;
         let blinkState = 'open';
+        let earClosedFrames = 0;
+        let earOpenFrames = 0;
+        let lastBlinkAt = 0;
         let requiredBlinks = REQUIRED_BLINKS;
         let livenessSequence = [];
         let livenessStepIndex = 0;
@@ -651,6 +660,7 @@
         let lastShownName = "";
         let recognizedEmployeeId = "";
         let recognizedEmployeeName = "";
+        let lastFaceBox = null;
 
         setCaptureReady(false);
         setLivenessProgress(0, false);
@@ -967,6 +977,9 @@
             requiredBlinks = REQUIRED_BLINKS;
             blinkCount = 0;
             blinkState = 'open';
+            earClosedFrames = 0;
+            earOpenFrames = 0;
+            lastBlinkAt = 0;
             livenessStartedAt = null;
             livenessChallengeStartedAt = Date.now();
             setLivenessProgress(0, false);
@@ -996,7 +1009,8 @@
             return 'Arahkan wajah ke kamera';
         }
 
-        function updateLiveness(landmarks) {
+        function updateLiveness(detections) {
+            const landmarks = detections.landmarks;
             const now = Date.now();
             if (!livenessStartedAt) livenessStartedAt = now;
             if (livenessStartedAt && now - livenessStartedAt > LIVENESS_TIMEOUT_MS) {
@@ -1012,7 +1026,9 @@
 
             if (step === 'blink') {
                 const avgEAR = getAvgEAR(landmarks);
-                updateBlinkState(avgEAR);
+                const stable = isFaceStable(detections.detection?.box);
+                const yaw = getYaw(landmarks);
+                updateBlinkState(avgEAR, stable, yaw, now);
                 if (blinkCount >= requiredBlinks) {
                     livenessStepIndex += 1;
                     headStableFrames = 0;
@@ -1026,7 +1042,8 @@
                     (step === 'left' && yaw <= -YAW_TURN_THRESHOLD) ||
                     (step === 'right' && yaw >= YAW_TURN_THRESHOLD);
 
-                if (ok) headStableFrames += 1;
+                const stable = isFaceStable(detections.detection?.box);
+                if (ok && stable) headStableFrames += 1;
                 else headStableFrames = 0;
 
                 if (headStableFrames >= HEAD_STABLE_FRAMES_REQUIRED) {
@@ -1034,6 +1051,8 @@
                     headStableFrames = 0;
                     blinkCount = 0;
                     blinkState = 'open';
+                    earClosedFrames = 0;
+                    earOpenFrames = 0;
                 }
                 const stepProgress = Math.min(1, headStableFrames / HEAD_STABLE_FRAMES_REQUIRED);
                 const overall = ((livenessStepIndex + stepProgress) / Math.max(1, livenessSequence.length)) * 100;
@@ -1050,6 +1069,31 @@
             }
 
             verifyLiveness();
+        }
+
+        function isFaceStable(box) {
+            if (!box) return false;
+            if (!lastFaceBox) {
+                lastFaceBox = { x: box.x, y: box.y, width: box.width, height: box.height };
+                return true;
+            }
+
+            const prev = lastFaceBox;
+            const prevCx = prev.x + prev.width / 2;
+            const prevCy = prev.y + prev.height / 2;
+            const cx = box.x + box.width / 2;
+            const cy = box.y + box.height / 2;
+
+            const dx = cx - prevCx;
+            const dy = cy - prevCy;
+            const norm = Math.max(1, Math.max(prev.width, prev.height));
+            const centerNormDelta = Math.sqrt(dx * dx + dy * dy) / norm;
+
+            const sizeDelta = Math.abs(box.width - prev.width) / Math.max(1, prev.width);
+
+            lastFaceBox = { x: box.x, y: box.y, width: box.width, height: box.height };
+
+            return centerNormDelta <= FACE_STABLE_CENTER_NORM_DELTA && sizeDelta <= FACE_STABLE_SIZE_DELTA;
         }
 
         function startScanning() {
@@ -1219,7 +1263,7 @@
                 setCaptureReady(false);
             }
 
-            updateLiveness(detections.landmarks);
+            updateLiveness(detections);
         }
 
         async function captureAndDetect() {
@@ -1296,6 +1340,7 @@
             lastShownName = "";
             recognizedEmployeeId = "";
             recognizedEmployeeName = "";
+            lastFaceBox = null;
             if (!isLivenessVerified) {
                 isAlreadyAttended = false;
                 candidateEmployee = null;
@@ -1312,6 +1357,9 @@
             if (!keepStartTime) livenessStartedAt = null;
             blinkCount = 0;
             blinkState = 'open';
+            earClosedFrames = 0;
+            earOpenFrames = 0;
+            lastBlinkAt = 0;
             requiredBlinks = REQUIRED_BLINKS;
             livenessChallengeStartedAt = null;
             livenessSequence = [];
@@ -1356,12 +1404,46 @@
             return (vertical1 + vertical2) / (2 * horizontal);
         }
 
-        function updateBlinkState(avgEAR) {
-            if (blinkState === 'open' && avgEAR < BLINK_LOW_THRESHOLD) {
-                blinkState = 'closed';
-            } else if (blinkState === 'closed' && avgEAR > BLINK_HIGH_THRESHOLD) {
+        function updateBlinkState(avgEAR, isStableFrame, yaw, now) {
+            if (!isStableFrame) {
+                earClosedFrames = 0;
+                earOpenFrames = 0;
                 blinkState = 'open';
-                blinkCount += 1;
+                return;
+            }
+
+            if (Math.abs(yaw) > 0.12) {
+                earClosedFrames = 0;
+                earOpenFrames = 0;
+                blinkState = 'open';
+                return;
+            }
+
+            if (avgEAR < BLINK_LOW_THRESHOLD) {
+                earClosedFrames += 1;
+                earOpenFrames = 0;
+                blinkState = 'closed';
+                if (earClosedFrames > BLINK_MAX_CLOSED_FRAMES) {
+                    earClosedFrames = 0;
+                    earOpenFrames = 0;
+                    blinkState = 'open';
+                }
+                return;
+            }
+
+            if (avgEAR > BLINK_HIGH_THRESHOLD) {
+                earOpenFrames += 1;
+                if (blinkState === 'closed' && earClosedFrames >= BLINK_MIN_CLOSED_FRAMES && earOpenFrames >= BLINK_MIN_OPEN_FRAMES) {
+                    if (!lastBlinkAt || now - lastBlinkAt >= BLINK_MIN_INTERVAL_MS) {
+                        blinkCount += 1;
+                        lastBlinkAt = now;
+                    }
+                    earClosedFrames = 0;
+                    earOpenFrames = 0;
+                    blinkState = 'open';
+                } else if (blinkState === 'open') {
+                    earClosedFrames = 0;
+                }
             }
         }
 
