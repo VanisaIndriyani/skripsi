@@ -423,22 +423,31 @@
         let livenessStartedAt = null;
         let blinkCount = 0;
         let blinkState = 'open';
+        let requiredBlinks = MIN_REQUIRED_BLINKS;
+        let livenessStep = 'blink';
+        let headSequence = ['left', 'right'];
+        let headSequenceIndex = 0;
+        let headStableFrames = 0;
         let missingFaceFrames = 0;
         let unknownFaceFrames = 0;
 
         const attendedUserIds = @json($attendedUserIds ?? []);
 
         const MATCH_THRESHOLD = 0.48;
+        const MAX_ACCEPT_DISTANCE = 0.44;
         const STABLE_FRAMES_REQUIRED = 2;
         const MIN_FACE_SCORE = 0.45;
-        const REQUIRED_BLINKS = 1;
+        const MIN_REQUIRED_BLINKS = 1;
+        const MAX_REQUIRED_BLINKS = 2;
         const LIVENESS_TIMEOUT_MS = 15000;
         const BLINK_LOW_THRESHOLD = 0.21;
         const BLINK_HIGH_THRESHOLD = 0.23;
+        const YAW_TURN_THRESHOLD = 0.18;
+        const YAW_CENTER_THRESHOLD = 0.08;
+        const HEAD_STABLE_FRAMES_REQUIRED = 3;
         const FACE_MISSING_RESET_FRAMES = 10;
         const UNKNOWN_RESET_FRAMES = 10;
         const INSTRUCTION_HOLD_MS = 2500;
-        const BLINK_INSTRUCTION_TEXT = `Kedip ${REQUIRED_BLINKS}x untuk verifikasi`;
         const MODEL_URL = "{{ asset('models') }}";
 
         setCaptureReady(false);
@@ -579,6 +588,90 @@
             captureBtn.disabled = !ready;
         }
 
+        function initLivenessChallenge() {
+            requiredBlinks = MIN_REQUIRED_BLINKS + Math.floor(Math.random() * (MAX_REQUIRED_BLINKS - MIN_REQUIRED_BLINKS + 1));
+            headSequence = Math.random() < 0.5 ? ['left', 'right'] : ['right', 'left'];
+            livenessStep = 'blink';
+            headSequenceIndex = 0;
+            headStableFrames = 0;
+            blinkCount = 0;
+            blinkState = 'open';
+            livenessStartedAt = null;
+        }
+
+        function getYaw(landmarks) {
+            const leftEye = landmarks.getLeftEye();
+            const rightEye = landmarks.getRightEye();
+            const leftCenter = averagePoint(leftEye);
+            const rightCenter = averagePoint(rightEye);
+            const midEye = { x: (leftCenter.x + rightCenter.x) / 2, y: (leftCenter.y + rightCenter.y) / 2 };
+            const interEye = distance(leftCenter, rightCenter);
+            const nose = landmarks.getNose();
+            const noseTip = nose && nose.length ? nose[Math.min(3, nose.length - 1)] : midEye;
+            if (!interEye) return 0;
+            return (noseTip.x - midEye.x) / interEye;
+        }
+
+        function getCurrentInstructionText() {
+            if (livenessStep === 'blink') return `Kedipkan mata ${requiredBlinks}x`;
+            if (livenessStep === 'head') {
+                const dir = headSequence[headSequenceIndex];
+                if (dir === 'left') return 'Gerakkan kepala ke kiri';
+                if (dir === 'right') return 'Gerakkan kepala ke kanan';
+                return 'Gerakkan kepala';
+            }
+            return 'Arahkan wajah ke kamera';
+        }
+
+        function updateLiveness(landmarks) {
+            const now = Date.now();
+            if (!livenessStartedAt) livenessStartedAt = now;
+            if (livenessStartedAt && now - livenessStartedAt > LIVENESS_TIMEOUT_MS) {
+                initLivenessChallenge();
+                livenessStartedAt = now;
+            }
+
+            if (livenessStep === 'blink') {
+                updateStatus(getCurrentInstructionText(), "warning", INSTRUCTION_HOLD_MS);
+                const avgEAR = getAvgEAR(landmarks);
+                updateBlinkState(avgEAR);
+                if (blinkCount >= requiredBlinks) {
+                    livenessStep = 'head';
+                    headStableFrames = 0;
+                }
+                return;
+            }
+
+            if (livenessStep === 'head') {
+                const yaw = getYaw(landmarks);
+                const dir = headSequence[headSequenceIndex];
+                updateStatus(getCurrentInstructionText(), "warning", INSTRUCTION_HOLD_MS);
+
+                if (Math.abs(yaw) <= YAW_CENTER_THRESHOLD) {
+                    headStableFrames = 0;
+                    return;
+                }
+
+                const ok =
+                    (dir === 'left' && yaw <= -YAW_TURN_THRESHOLD) ||
+                    (dir === 'right' && yaw >= YAW_TURN_THRESHOLD);
+
+                if (ok) {
+                    headStableFrames += 1;
+                } else {
+                    headStableFrames = 0;
+                }
+
+                if (headStableFrames >= HEAD_STABLE_FRAMES_REQUIRED) {
+                    headSequenceIndex += 1;
+                    headStableFrames = 0;
+                    if (headSequenceIndex >= headSequence.length) {
+                        verifyLiveness();
+                    }
+                }
+            }
+        }
+
         function startScanning() {
             if (detectionInterval) clearInterval(detectionInterval);
             detectionInterval = setInterval(async () => {
@@ -610,7 +703,7 @@
                     missingFaceFrames += 1;
                     if (missingFaceFrames >= FACE_MISSING_RESET_FRAMES) resetMatchState();
                     if (!isLivenessVerified) {
-                        if (candidateEmployee) updateStatus(BLINK_INSTRUCTION_TEXT, "warning", INSTRUCTION_HOLD_MS);
+                        if (candidateEmployee) updateStatus(getCurrentInstructionText(), "warning", INSTRUCTION_HOLD_MS);
                         else updateStatus("Arahkan wajah ke kamera", "info");
                     }
                     return;
@@ -623,7 +716,7 @@
                     if (unknownFaceFrames >= UNKNOWN_RESET_FRAMES) resetMatchState();
                     if (!candidateEmployee) detectedNameInput.value = "Mencari wajah...";
                     if (!isLivenessVerified) {
-                        if (candidateEmployee) updateStatus(BLINK_INSTRUCTION_TEXT, "warning", INSTRUCTION_HOLD_MS);
+                        if (candidateEmployee) updateStatus(getCurrentInstructionText(), "warning", INSTRUCTION_HOLD_MS);
                         else updateStatus("Wajah Tidak Dikenal", "warning");
                     }
                     return;
@@ -655,7 +748,7 @@
                     candidateEmployee = matchedEmployee;
                     detectedNameInput.value = "";
                     isAlreadyAttended = attendedUserIds.includes(String(matchedEmployee.id));
-                    resetLivenessState();
+                    initLivenessChallenge();
                 }
 
                 if (isLivenessVerified) return;
@@ -670,17 +763,12 @@
 
                 setCaptureReady(false);
                 const landmarks = detections.landmarks;
-                const now = Date.now();
-                if (!livenessStartedAt) livenessStartedAt = now;
-                if (livenessStartedAt && now - livenessStartedAt > LIVENESS_TIMEOUT_MS) {
-                    resetLivenessState();
-                    livenessStartedAt = now;
+                if (result.distance > MAX_ACCEPT_DISTANCE) {
+                    updateStatus("Akurasi rendah, hadapkan wajah ke kamera", "warning", INSTRUCTION_HOLD_MS);
+                    return;
                 }
 
-                updateStatus(BLINK_INSTRUCTION_TEXT, "warning", INSTRUCTION_HOLD_MS);
-                const avgEAR = getAvgEAR(landmarks);
-                updateBlinkState(avgEAR);
-                if (blinkCount >= REQUIRED_BLINKS) verifyLiveness();
+                updateLiveness(landmarks);
             }, 100);
         }
 
@@ -693,7 +781,7 @@
                 Swal.fire({
                     icon: 'warning',
                     title: 'Verifikasi dulu',
-                    text: BLINK_INSTRUCTION_TEXT + ".",
+                    text: "Ikuti instruksi liveness dulu.",
                 });
                 return;
             }
@@ -732,7 +820,7 @@
             isAlreadyAttended = false;
             candidateEmployee = null;
             resetMatchState();
-            resetLivenessState(true);
+            initLivenessChallenge();
             updateStatus("Siap Memindai", "info");
             startScanning();
         }
@@ -742,7 +830,7 @@
                 Swal.fire({
                     icon: 'error',
                     title: 'Verifikasi belum lengkap',
-                    text: BLINK_INSTRUCTION_TEXT + ".",
+                    text: "Ikuti instruksi liveness dulu.",
                 });
                 return;
             }
@@ -768,7 +856,7 @@
                 userIdInput.value = "";
                 submitBtn.disabled = true;
                 scanLine.style.animationPlayState = 'running';
-                resetLivenessState();
+                initLivenessChallenge();
             }
         }
 
@@ -777,6 +865,11 @@
             if (!keepStartTime) livenessStartedAt = null;
             blinkCount = 0;
             blinkState = 'open';
+            requiredBlinks = MIN_REQUIRED_BLINKS;
+            livenessStep = 'blink';
+            headSequence = ['left', 'right'];
+            headSequenceIndex = 0;
+            headStableFrames = 0;
             submitBtn.disabled = true;
             setCaptureReady(false);
             userIdInput.value = "";
@@ -791,7 +884,7 @@
             submitBtn.disabled = true;
             setCaptureReady(true);
             scanLine.style.animationPlayState = 'paused';
-            updateStatus("Wajah Terverifikasi - Silakan Ambil Foto", "success");
+            updateStatus("Wajah terverifikasi", "success");
             stopScanning();
         }
 
