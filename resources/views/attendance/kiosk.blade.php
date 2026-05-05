@@ -418,7 +418,6 @@
                 align-items: flex-start; /* Align to top instead of center */
                 padding: 40px 15px; /* More vertical padding */
             }
-            #detected_name,
             .liveness-card {
                 display: none !important;
             }
@@ -575,14 +574,14 @@
 
         const DETECTION_INTERVAL_MS = 90;
         const VIDEO_INPUT_SIZE = 96;
-        const VIDEO_SCORE_THRESHOLD = 0.55;
+        const VIDEO_SCORE_THRESHOLD = 0.45;
         const PHOTO_INPUT_SIZE = 160;
 
         const MATCH_THRESHOLD = 0.48;
         const MAX_ACCEPT_DISTANCE = 0.44;
         const STABLE_FRAMES_REQUIRED = 2;
 
-        const MIN_DETECTION_SCORE = 0.6;
+        const MIN_DETECTION_SCORE = 0.5;
         const LIVENESS_TIMEOUT_MS = 10000;
         const MIN_LIVENESS_DURATION_MS = 1500;
         const REQUIRED_BLINKS = 2;
@@ -917,8 +916,8 @@
                 const faceCenterX = box.x + box.width / 2;
                 const faceCenterY = box.y + box.height / 2;
 
-                const toleranceX = videoWidth * 0.2;
-                const toleranceY = videoHeight * 0.2;
+                const toleranceX = videoWidth * 0.28;
+                const toleranceY = videoHeight * 0.28;
 
                 return (
                     Math.abs(faceCenterX - centerX) < toleranceX &&
@@ -1096,7 +1095,11 @@
 
             if (detections.detection && detections.detection.score < MIN_DETECTION_SCORE) {
                 setCaptureReady(false);
-                updateStatus("Arahkan wajah ke kamera", "warning", INSTRUCTION_HOLD_MS);
+                if (!isLivenessVerified && isFaceCentered(detections)) {
+                    updateStatus("", "info");
+                } else {
+                    updateStatus("Arahkan wajah ke kamera", "warning", INSTRUCTION_HOLD_MS);
+                }
                 setVideoState('detecting');
                 return;
             }
@@ -1128,7 +1131,8 @@
             }
 
             if (stableMatchFrames < STABLE_FRAMES_REQUIRED) {
-                if (!isLivenessVerified) updateStatus("Mendeteksi wajah...", "info");
+                if (!isLivenessVerified && isFaceCentered(detections)) updateStatus("", "info");
+                else if (!isLivenessVerified) updateStatus("Mendeteksi wajah...", "info");
                 setVideoState('detecting');
                 return;
             }
