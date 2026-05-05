@@ -6,7 +6,6 @@ abstract class Controller
 {
     protected function logActivity($activity, $description = null)
     {
-        \Illuminate\Support\Facades\Log::info("Logging activity: $activity");
         try {
             \App\Models\AuditLog::create([
                 'user_id' => \Illuminate\Support\Facades\Auth::id(),

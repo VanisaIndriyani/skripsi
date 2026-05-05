@@ -66,7 +66,6 @@
                                 @endif
                                 <div>
                                     <div class="fw-bold text-dark">{{ $employee->name }}</div>
-                                    <small class="text-muted">{{ $employee->email }}</small>
                                 </div>
                             </div>
                         </td>
@@ -152,7 +151,7 @@
                 <h5 class="modal-title fw-bold">Tambah Karyawan Baru</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form action="{{ route('admin.employees.store') }}" method="POST" enctype="multipart/form-data">
+            <form id="createEmployeeForm" action="{{ route('admin.employees.store') }}" method="POST" enctype="multipart/form-data">
                 @csrf
                 <div class="modal-body pt-4">
                     <div class="mb-3">
@@ -171,7 +170,7 @@
                 </div>
                 <div class="modal-footer border-top-0 pt-0 pb-4">
                     <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Batal</button>
-                    <button type="submit" class="btn btn-gold rounded-pill px-4">Simpan Data</button>
+                    <button type="submit" class="btn btn-gold rounded-pill px-4" id="createEmployeeSubmitBtn">Simpan Data</button>
                 </div>
             </form>
         </div>
@@ -192,5 +191,14 @@
             }
         });
     });
+
+    const createEmployeeForm = document.getElementById('createEmployeeForm');
+    const createEmployeeSubmitBtn = document.getElementById('createEmployeeSubmitBtn');
+    if (createEmployeeForm && createEmployeeSubmitBtn) {
+        createEmployeeForm.addEventListener('submit', function () {
+            createEmployeeSubmitBtn.disabled = true;
+            createEmployeeSubmitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Menyimpan...';
+        });
+    }
 </script>
 @endsection

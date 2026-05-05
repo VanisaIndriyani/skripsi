@@ -65,7 +65,10 @@ class AdminController extends Controller
     // Employee CRUD
     public function employees()
     {
-        $employees = User::where('role', 'employee')->orderBy('name')->paginate(10);
+        $employees = User::select(['id', 'name', 'role', 'phone_number', 'photo'])
+            ->where('role', 'employee')
+            ->orderBy('name')
+            ->paginate(10);
         return view('admin.employees.index', compact('employees'));
     }
 
