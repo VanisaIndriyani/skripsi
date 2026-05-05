@@ -404,20 +404,29 @@
 
         /* Mobile Adjustments */
         @media (max-width: 576px) {
-            .clock-widget { font-size: 4rem; }
+            .logo-landing { width: 100px; height: 100px; }
+            .company-name { font-size: 1.4rem; letter-spacing: 1.2px; }
+            .clock-container { padding: 18px; border-radius: 22px; }
+            .clock-widget { font-size: 3.2rem; }
+            .date-widget { font-size: 0.95rem; letter-spacing: 1.2px; }
+            .session-info { padding: 12px 16px; border-radius: 22px; }
+            .start-btn { width: 220px; height: 60px; font-size: 1.05rem; }
             .scan-container {
                 padding: 10px;
                 margin: auto;
                 min-height: 100vh;
                 justify-content: center;
+                max-width: 320px;
+                gap: 14px;
             }
-            .video-container { border-radius: 30px; }
-            .scan-info-card { padding: 15px; } /* Adjusted padding for smaller screens */
+            .video-container { border-radius: 28px; border-width: 3px; }
+            .scan-info-card { padding: 14px; border-radius: 20px; }
             .scan-overlay {
                 overflow-y: auto; /* Allow scrolling on small screens */
                 align-items: flex-start; /* Align to top instead of center */
-                padding: 40px 15px; /* More vertical padding */
+                padding: 22px 12px; /* More vertical padding */
             }
+            .close-btn { top: 18px; right: 18px; width: 44px; height: 44px; }
             .liveness-card {
                 display: none !important;
             }
@@ -1166,6 +1175,7 @@
                 candidateEmployee = matchedEmployee;
                 isAlreadyAttended = attendedUserIds.includes(String(matchedEmployee.id));
                 initLivenessChallenge();
+                userIdInput.value = candidateEmployee.id;
             }
 
             if (isLivenessVerified) return;
@@ -1198,19 +1208,17 @@
                 return;
             }
 
-            if (!isLivenessVerified) updateStatus("", "info");
+            if (!isLivenessVerified) {
+                updateStatus("", "info");
+                setVideoState('locked');
+                setCaptureReady(true);
+            }
+
             updateLiveness(detections.landmarks);
         }
 
         async function captureAndDetect() {
-            if (!isLivenessVerified || !userIdInput.value) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Verifikasi dulu',
-                    text: "Ikuti instruksi liveness dulu.",
-                });
-                return;
-            }
+            if (!userIdInput.value) return;
 
             isProcessing = true;
             stopScanning();
