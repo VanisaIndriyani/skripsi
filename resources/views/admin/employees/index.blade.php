@@ -18,7 +18,16 @@
                 </div>
             </div>
             <div class="col-md-6 text-md-end mt-3 mt-md-0">
-                <span class="text-muted small">Total: <strong>{{ $employees->total() }}</strong> Karyawan</span>
+                <div class="d-flex justify-content-md-end justify-content-start align-items-center gap-2">
+                    <form id="bulkDeleteEmployeesForm" action="{{ route('admin.employees.bulkDestroy') }}" method="POST" class="delete-form m-0">
+                        @csrf
+                        @method('DELETE')
+                        <button type="button" id="bulkDeleteEmployeesBtn" class="btn btn-outline-danger rounded-pill px-3" disabled>
+                            <i class="fas fa-trash me-2"></i> Hapus Terpilih
+                        </button>
+                    </form>
+                    <span class="text-muted small">Total: <strong>{{ $employees->total() }}</strong> Karyawan</span>
+                </div>
             </div>
         </div>
     </div>
@@ -39,6 +48,9 @@
             <table class="table table-hover align-middle mb-0" id="employeeTable">
                 <thead class="table-light">
                     <tr>
+                        <th class="ps-4" style="width: 44px;">
+                            <input class="form-check-input" type="checkbox" id="selectAllEmployees">
+                        </th>
                         <th class="ps-4">Karyawan</th>
                         <th>No. HP</th>
                         <th>Status</th>
@@ -48,6 +60,9 @@
                 <tbody>
                     @forelse($employees as $employee)
                     <tr>
+                        <td class="ps-4">
+                            <input class="form-check-input employee-checkbox" type="checkbox" value="{{ $employee->id }}">
+                        </td>
                         <td class="ps-4">
                             <div class="d-flex align-items-center">
                                 @if($employee->photo)
@@ -121,7 +136,7 @@
                     </div>
                     @empty
                     <tr>
-                        <td colspan="4" class="text-center py-5 text-muted">
+                        <td colspan="5" class="text-center py-5 text-muted">
                             <img src="https://illustrations.popsy.co/gray/surr-list-is-empty.svg" width="150" class="mb-3 opacity-50">
                             <p>Belum ada data karyawan.</p>
                         </td>
@@ -176,7 +191,7 @@
         let tableRows = document.querySelectorAll('#employeeTable tbody tr');
 
         tableRows.forEach(row => {
-            let name = row.querySelector('td:nth-child(1)').innerText.toLowerCase();
+            let name = row.querySelector('td:nth-child(2)').innerText.toLowerCase();
             if (name.includes(searchText)) {
                 row.style.display = '';
             } else {
@@ -184,6 +199,67 @@
             }
         });
     });
+
+    const bulkDeleteEmployeesBtn = document.getElementById('bulkDeleteEmployeesBtn');
+    const bulkDeleteEmployeesForm = document.getElementById('bulkDeleteEmployeesForm');
+    const selectAllEmployees = document.getElementById('selectAllEmployees');
+
+    function getSelectedEmployeeIds() {
+        return Array.from(document.querySelectorAll('.employee-checkbox:checked')).map(cb => cb.value);
+    }
+
+    function syncBulkDeleteEmployeesUi() {
+        const selected = getSelectedEmployeeIds();
+        if (bulkDeleteEmployeesBtn) {
+            bulkDeleteEmployeesBtn.disabled = selected.length === 0;
+            bulkDeleteEmployeesBtn.innerHTML = selected.length
+                ? `<i class="fas fa-trash me-2"></i> Hapus Terpilih (${selected.length})`
+                : `<i class="fas fa-trash me-2"></i> Hapus Terpilih`;
+        }
+        if (selectAllEmployees) {
+            const all = document.querySelectorAll('.employee-checkbox');
+            const checked = document.querySelectorAll('.employee-checkbox:checked');
+            selectAllEmployees.checked = all.length > 0 && checked.length === all.length;
+            selectAllEmployees.indeterminate = checked.length > 0 && checked.length < all.length;
+        }
+    }
+
+    if (selectAllEmployees) {
+        selectAllEmployees.addEventListener('change', function () {
+            document.querySelectorAll('.employee-checkbox').forEach(cb => {
+                cb.checked = selectAllEmployees.checked;
+            });
+            syncBulkDeleteEmployeesUi();
+        });
+    }
+
+    document.addEventListener('change', function (e) {
+        if (e.target && e.target.classList && e.target.classList.contains('employee-checkbox')) {
+            syncBulkDeleteEmployeesUi();
+        }
+    });
+
+    if (bulkDeleteEmployeesBtn && bulkDeleteEmployeesForm) {
+        bulkDeleteEmployeesBtn.addEventListener('click', function (e) {
+            const selected = getSelectedEmployeeIds();
+            if (selected.length === 0) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+
+            bulkDeleteEmployeesForm.querySelectorAll('input[name="employee_ids[]"]').forEach(el => el.remove());
+            selected.forEach(id => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'employee_ids[]';
+                input.value = id;
+                bulkDeleteEmployeesForm.appendChild(input);
+            });
+        });
+    }
+
+    syncBulkDeleteEmployeesUi();
 
     const createEmployeeForm = document.getElementById('createEmployeeForm');
     const createEmployeeSubmitBtn = document.getElementById('createEmployeeSubmitBtn');

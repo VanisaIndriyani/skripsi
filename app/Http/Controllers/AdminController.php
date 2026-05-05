@@ -144,6 +144,30 @@ class AdminController extends Controller
         return redirect()->route('admin.employees')->with('success', 'Employee deleted successfully.');
     }
 
+    public function bulkDestroyEmployees(Request $request)
+    {
+        $validated = $request->validate([
+            'employee_ids' => 'required|array|min:1',
+            'employee_ids.*' => 'integer|exists:users,id',
+        ]);
+
+        $ids = $validated['employee_ids'];
+        $employees = User::whereIn('id', $ids)->where('role', 'employee')->get(['id', 'name', 'photo']);
+
+        foreach ($employees as $employee) {
+            if ($employee->photo && Storage::disk('public')->exists($employee->photo)) {
+                Storage::disk('public')->delete($employee->photo);
+            }
+        }
+
+        $count = $employees->count();
+        User::whereIn('id', $employees->pluck('id'))->delete();
+
+        $this->logActivity('Hapus Banyak Karyawan', 'Admin menghapus ' . $count . ' karyawan.');
+
+        return redirect()->route('admin.employees')->with('success', 'Berhasil menghapus ' . $count . ' karyawan.');
+    }
+
     // Attendance Monitoring
     public function attendances()
     {

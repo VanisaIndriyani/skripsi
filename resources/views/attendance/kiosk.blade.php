@@ -649,6 +649,8 @@
         let missingFaceFrames = 0;
         let unknownFaceFrames = 0;
         let lastShownName = "";
+        let recognizedEmployeeId = "";
+        let recognizedEmployeeName = "";
 
         setCaptureReady(false);
         setLivenessProgress(0, false);
@@ -1172,16 +1174,13 @@
                 return;
             }
 
-            if (matchedEmployee.name !== lastShownName) {
-                if (detectedNameInput) detectedNameInput.value = matchedEmployee.name;
-                lastShownName = matchedEmployee.name;
-            }
-
             if (!candidateEmployee || candidateEmployee.id !== matchedEmployee.id) {
                 candidateEmployee = matchedEmployee;
                 isAlreadyAttended = attendedUserIds.includes(String(matchedEmployee.id));
                 initLivenessChallenge();
-                userIdInput.value = candidateEmployee.id;
+                recognizedEmployeeId = String(candidateEmployee.id);
+                recognizedEmployeeName = candidateEmployee.name;
+                lastShownName = recognizedEmployeeName;
             }
 
             if (isLivenessVerified) return;
@@ -1217,14 +1216,14 @@
             if (!isLivenessVerified) {
                 updateStatus("", "info");
                 setVideoState('recognized');
-                setCaptureReady(true);
+                setCaptureReady(false);
             }
 
             updateLiveness(detections.landmarks);
         }
 
         async function captureAndDetect() {
-            if (!userIdInput.value) return;
+            if (!isLivenessVerified || !userIdInput.value) return;
 
             isProcessing = true;
             stopScanning();
@@ -1295,6 +1294,8 @@
             missingFaceFrames = 0;
             unknownFaceFrames = 0;
             lastShownName = "";
+            recognizedEmployeeId = "";
+            recognizedEmployeeName = "";
             if (!isLivenessVerified) {
                 isAlreadyAttended = false;
                 candidateEmployee = null;
@@ -1319,14 +1320,15 @@
             submitBtn.disabled = true;
             setCaptureReady(false);
             userIdInput.value = "";
+            if (detectedNameInput) detectedNameInput.value = "";
             scanLine.style.animationPlayState = 'running';
         }
 
         function verifyLiveness() {
             if (!candidateEmployee) return;
             isLivenessVerified = true;
-            if (detectedNameInput) detectedNameInput.value = candidateEmployee.name;
-            userIdInput.value = candidateEmployee.id;
+            if (detectedNameInput) detectedNameInput.value = recognizedEmployeeName || candidateEmployee.name;
+            userIdInput.value = recognizedEmployeeId || candidateEmployee.id;
             submitBtn.disabled = true;
             setCaptureReady(true);
             scanLine.style.animationPlayState = 'paused';

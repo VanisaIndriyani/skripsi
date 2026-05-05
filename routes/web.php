@@ -39,6 +39,7 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::get('/admin/employees', [AdminController::class, 'employees'])->name('admin.employees');
     Route::post('/admin/employees', [AdminController::class, 'storeEmployee'])->name('admin.employees.store');
     Route::put('/admin/employees/{user}', [AdminController::class, 'updateEmployee'])->name('admin.employees.update');
+    Route::delete('/admin/employees/bulk', [AdminController::class, 'bulkDestroyEmployees'])->name('admin.employees.bulkDestroy');
     Route::delete('/admin/employees/{user}', [AdminController::class, 'destroyEmployee'])->name('admin.employees.destroy');
 
     // Work Sessions
