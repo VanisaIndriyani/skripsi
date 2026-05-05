@@ -362,7 +362,7 @@
                     <input type="hidden" name="user_id" id="user_id">
 
                     <div class="d-grid gap-2">
-                        <button type="button" id="captureBtn" onClick="captureAndDetect()" class="btn btn-gold rounded-pill py-3">
+                        <button type="button" id="captureBtn" class="btn btn-gold rounded-pill py-3">
                             <i class="fas fa-camera me-2"></i> AMBIL FOTO
                         </button>
                         <div id="actionButtons" class="d-none d-flex gap-2">
@@ -415,6 +415,7 @@
         let isDetecting = false;
         let detectionInterval = null;
         let isProcessing = false;
+        let isStartingCamera = false;
         let isLivenessVerified = false;
         let isAlreadyAttended = false;
         let candidateEmployee = null;
@@ -444,6 +445,16 @@
         let cameraStartTimeoutHandle = null;
 
         setCaptureReady(false);
+        captureBtn.disabled = false;
+        captureBtn.innerHTML = '<i class="fas fa-camera me-2"></i> MULAI KAMERA';
+
+        captureBtn.addEventListener('click', function () {
+            if (!stream) {
+                startVideo();
+                return;
+            }
+            captureAndDetect();
+        });
 
         const OFFICE_LAT = {{ \App\Models\Setting::get('office_latitude', 0) }};
         const OFFICE_LNG = {{ \App\Models\Setting::get('office_longitude', 0) }};
@@ -589,11 +600,15 @@
 
         function handleTapToStartCamera() {
             if (stream) return;
-            if (isProcessing) return;
+            if (isStartingCamera) return;
             startVideo();
         }
 
         function startVideo() {
+            if (stream) return;
+            if (isStartingCamera) return;
+            isStartingCamera = true;
+
             updateStatus("Inisialisasi...", "warning");
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 if (cameraStartTimeoutHandle) clearTimeout(cameraStartTimeoutHandle);
@@ -606,7 +621,7 @@
 
                 document.getElementById('scanInterface').addEventListener('click', handleTapToStartCamera, { passive: true });
 
-                navigator.mediaDevices.getUserMedia({
+                const primaryConstraints = {
                     audio: false,
                     video: {
                         facingMode: { ideal: "user" },
@@ -614,7 +629,11 @@
                         height: { ideal: 480 },
                         frameRate: { ideal: 24, max: 30 }
                     }
-                })
+                };
+
+                const fallbackConstraints = { audio: false, video: true };
+
+                navigator.mediaDevices.getUserMedia(primaryConstraints)
                     .then(s => {
                         stream = s;
                         video.srcObject = stream;
@@ -629,18 +648,50 @@
                             if (cameraStartTimeoutHandle) clearTimeout(cameraStartTimeoutHandle);
                             updateStatus("Siap Memindai", "info");
                             document.getElementById('scanInterface').removeEventListener('click', handleTapToStartCamera);
+                            captureBtn.innerHTML = '<i class="fas fa-camera me-2"></i> AMBIL FOTO';
+                            captureBtn.disabled = true;
+                            isStartingCamera = false;
                             await ensureFaceSystemLoaded();
                             startScanning();
                         };
                     })
-                    .catch(() => updateStatus("Kamera Error", "danger"));
+                    .catch(() => {
+                        navigator.mediaDevices.getUserMedia(fallbackConstraints)
+                            .then(s => {
+                                stream = s;
+                                video.srcObject = stream;
+                                video.onloadedmetadata = () => {
+                                    const playPromise = video.play();
+                                    if (playPromise && typeof playPromise.catch === 'function') {
+                                        playPromise.catch(() => {});
+                                    }
+                                };
+                                video.onplaying = async () => {
+                                    if (cameraStartTimeoutHandle) clearTimeout(cameraStartTimeoutHandle);
+                                    updateStatus("Siap Memindai", "info");
+                                    document.getElementById('scanInterface').removeEventListener('click', handleTapToStartCamera);
+                                    captureBtn.innerHTML = '<i class="fas fa-camera me-2"></i> AMBIL FOTO';
+                                    captureBtn.disabled = true;
+                                    isStartingCamera = false;
+                                    await ensureFaceSystemLoaded();
+                                    startScanning();
+                                };
+                            })
+                            .catch(() => {
+                                isStartingCamera = false;
+                                updateStatus("Kamera Error", "danger", 0, true);
+                            });
+                    });
             }
         }
 
         function stopVideo() {
             if (stream) stream.getTracks().forEach(track => track.stop());
             video.srcObject = null;
+            stream = null;
             document.getElementById('scanInterface').removeEventListener('click', handleTapToStartCamera);
+            captureBtn.disabled = false;
+            captureBtn.innerHTML = '<i class="fas fa-camera me-2"></i> MULAI KAMERA';
         }
 
         let statusHoldUntil = 0;
