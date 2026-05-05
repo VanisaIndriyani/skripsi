@@ -1234,7 +1234,7 @@
             if (isLivenessVerified) return;
 
             if (isAlreadyAttended) {
-                setCaptureReady(false);
+                setCaptureReady(true);
                 submitBtn.disabled = true;
                 updateStatus("Sudah absen hari ini", "secondary", INSTRUCTION_HOLD_MS);
                 stopScanning();
@@ -1271,7 +1271,25 @@
         }
 
         async function captureAndDetect() {
-            if (!userIdInput.value) return;
+            if (isAlreadyAttended) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Sudah absen',
+                    text: 'Kamu sudah absen hari ini.',
+                });
+                return;
+            }
+
+            const targetId = recognizedEmployeeId || userIdInput.value;
+            if (!targetId) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Belum terdeteksi',
+                    text: 'Arahkan wajah ke kamera dulu.',
+                });
+                return;
+            }
+
             if (!isLivenessVerified) {
                 Swal.fire({
                     icon: 'info',
@@ -1281,6 +1299,7 @@
                 return;
             }
 
+            userIdInput.value = targetId;
             isProcessing = true;
             stopScanning();
             
