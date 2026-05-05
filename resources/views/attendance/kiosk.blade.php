@@ -609,6 +609,12 @@
         const BLINK_MAX_CLOSED_FRAMES = 18;
         const YAW_TURN_THRESHOLD = 0.18;
         const HEAD_STABLE_FRAMES_REQUIRED = 2;
+        const REQUIRE_MOUTH_STEP = false;
+        const MOUTH_STEP_PROBABILITY = 0.35;
+        const MOUTH_OPEN_THRESHOLD = 0.38;
+        const MOUTH_CLOSE_THRESHOLD = 0.30;
+        const MOUTH_MIN_OPEN_FRAMES = 2;
+        const MOUTH_MIN_CLOSED_FRAMES = 2;
         const FACE_STABLE_CENTER_NORM_DELTA = 0.05;
         const FACE_STABLE_SIZE_DELTA = 0.06;
         const FACE_MISSING_RESET_FRAMES = 8;
@@ -655,6 +661,9 @@
         let livenessSequence = [];
         let livenessStepIndex = 0;
         let headStableFrames = 0;
+        let mouthState = 'closed';
+        let mouthOpenFrames = 0;
+        let mouthClosedFrames = 0;
         let missingFaceFrames = 0;
         let unknownFaceFrames = 0;
         let lastShownName = "";
@@ -785,7 +794,7 @@
         }
 
         function openScanner() {
-            Swal.fire({
+            safeSwalFire({
                 title: 'Validasi Lokasi',
                 text: 'Sedang mengecek posisi GPS Anda...',
                 allowOutsideClick: false,
@@ -806,14 +815,14 @@
                     const distance = getDistanceFromLatLonInKm(lat, lng, OFFICE_LAT, OFFICE_LNG) * 1000;
                     
                     if (distance > MAX_RADIUS) {
-                        Swal.fire({ icon: 'error', title: 'Diluar Jangkauan', text: `Jarak Anda ${Math.round(distance)}m. Maksimum radius ${MAX_RADIUS}m.` });
+                        safeSwalFire({ icon: 'error', title: 'Diluar Jangkauan', text: `Jarak Anda ${Math.round(distance)}m. Maksimum radius ${MAX_RADIUS}m.` });
                         closeScanner();
                     } else {
-                        Swal.close();
+                        if (window.Swal && typeof Swal.close === 'function') Swal.close();
                         document.getElementById('landingPage').classList.add('d-none');
                     }
                 }, error => {
-                    Swal.fire({ icon: 'error', title: 'GPS Gagal', text: 'Mohon aktifkan izin lokasi di browser Anda.' });
+                    safeSwalFire({ icon: 'error', title: 'GPS Gagal', text: 'Mohon aktifkan izin lokasi di browser Anda.' });
                     closeScanner();
                 }, { enableHighAccuracy: false, timeout: 3000, maximumAge: 60000 });
             }
@@ -902,7 +911,17 @@
             if (statusSpinner) statusSpinner.classList.toggle('d-none', !shouldSpin);
         }
 
+        function safeSwalFire(options) {
+            if (window.Swal && typeof Swal.fire === 'function') return Swal.fire(options);
+            const title = options && options.title ? String(options.title) : '';
+            const text = options && options.text ? String(options.text) : '';
+            const message = [title, text].filter(Boolean).join('\n');
+            if (message) window.alert(message);
+            return Promise.resolve();
+        }
+
         function setCaptureReady(ready) {
+            if (!captureBtn) return;
             captureBtn.disabled = !ready;
         }
 
@@ -970,7 +989,15 @@
 
         function initLivenessChallenge() {
             const headStep = Math.random() < 0.5 ? 'left' : 'right';
-            livenessSequence = Math.random() < 0.5 ? ['blink', headStep] : [headStep, 'blink'];
+            const steps = ['blink', headStep];
+            if (REQUIRE_MOUTH_STEP || Math.random() < MOUTH_STEP_PROBABILITY) {
+                steps.push('mouth');
+            }
+            for (let i = steps.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [steps[i], steps[j]] = [steps[j], steps[i]];
+            }
+            livenessSequence = steps;
             livenessStepIndex = 0;
             headStableFrames = 0;
 
@@ -980,6 +1007,9 @@
             earClosedFrames = 0;
             earOpenFrames = 0;
             lastBlinkAt = 0;
+            mouthState = 'closed';
+            mouthOpenFrames = 0;
+            mouthClosedFrames = 0;
             livenessStartedAt = null;
             livenessChallengeStartedAt = Date.now();
             setLivenessProgress(0, false);
@@ -1006,7 +1036,64 @@
             if (step === 'blink') return `Kedipkan mata ${REQUIRED_BLINKS}x`;
             if (step === 'left') return 'Lihat kiri';
             if (step === 'right') return 'Lihat kanan';
+            if (step === 'mouth') return 'Buka mulut lalu tutup';
             return 'Arahkan wajah ke kamera';
+        }
+
+        function getMAR(landmarks) {
+            const mouth = landmarks.getMouth();
+            if (!mouth?.length || mouth.length < 10) return 0;
+            const left = mouth[0];
+            const right = mouth[6] || mouth[mouth.length - 1];
+            const top = mouth[3];
+            const bottom = mouth[9] || mouth[Math.min(9, mouth.length - 1)];
+            const horizontal = distance(left, right);
+            const vertical = distance(top, bottom);
+            if (!horizontal) return 0;
+            return vertical / horizontal;
+        }
+
+        function updateMouthState(mar, isStableFrame, yaw) {
+            if (!isStableFrame) {
+                mouthState = 'closed';
+                mouthOpenFrames = 0;
+                mouthClosedFrames = 0;
+                return false;
+            }
+
+            if (Math.abs(yaw) > 0.12) {
+                mouthState = 'closed';
+                mouthOpenFrames = 0;
+                mouthClosedFrames = 0;
+                return false;
+            }
+
+            if (mar >= MOUTH_OPEN_THRESHOLD) {
+                mouthOpenFrames += 1;
+                mouthClosedFrames = 0;
+                if (mouthOpenFrames >= MOUTH_MIN_OPEN_FRAMES) {
+                    mouthState = 'open';
+                }
+                return false;
+            }
+
+            if (mar <= MOUTH_CLOSE_THRESHOLD) {
+                mouthClosedFrames += 1;
+                if (mouthState === 'open' && mouthClosedFrames >= MOUTH_MIN_CLOSED_FRAMES) {
+                    mouthState = 'closed';
+                    mouthOpenFrames = 0;
+                    mouthClosedFrames = 0;
+                    return true;
+                }
+                if (mouthState !== 'open') {
+                    mouthOpenFrames = 0;
+                }
+                return false;
+            }
+
+            mouthOpenFrames = 0;
+            mouthClosedFrames = 0;
+            return false;
         }
 
         function updateLiveness(detections) {
@@ -1021,7 +1108,9 @@
             if (!livenessSequence.length) initLivenessChallenge();
 
             const step = livenessSequence[livenessStepIndex] || 'blink';
-            updateStatus(getCurrentInstructionText(), "warning", INSTRUCTION_HOLD_MS);
+            const instructionText = getCurrentInstructionText();
+            updateStatus(instructionText, "warning", INSTRUCTION_HOLD_MS);
+            if (detectedNameInput) detectedNameInput.value = instructionText;
             setVideoState('recognized');
 
             if (step === 'blink') {
@@ -1032,8 +1121,31 @@
                 if (blinkCount >= requiredBlinks) {
                     livenessStepIndex += 1;
                     headStableFrames = 0;
+                    mouthState = 'closed';
+                    mouthOpenFrames = 0;
+                    mouthClosedFrames = 0;
                 }
                 const stepProgress = Math.min(1, blinkCount / requiredBlinks);
+                const overall = ((livenessStepIndex + stepProgress) / Math.max(1, livenessSequence.length)) * 100;
+                setLivenessProgress(overall, false);
+            } else if (step === 'mouth') {
+                const stable = isFaceStable(detections.detection?.box);
+                const yaw = getYaw(landmarks);
+                const mar = getMAR(landmarks);
+                const done = updateMouthState(mar, stable, yaw);
+                if (done) {
+                    livenessStepIndex += 1;
+                    headStableFrames = 0;
+                    blinkCount = 0;
+                    blinkState = 'open';
+                    earClosedFrames = 0;
+                    earOpenFrames = 0;
+                }
+                const openPart = Math.min(1, mouthOpenFrames / Math.max(1, MOUTH_MIN_OPEN_FRAMES)) * 0.5;
+                const closePart = mouthState === 'open'
+                    ? 0.5 + Math.min(1, mouthClosedFrames / Math.max(1, MOUTH_MIN_CLOSED_FRAMES)) * 0.5
+                    : openPart;
+                const stepProgress = Math.min(1, closePart);
                 const overall = ((livenessStepIndex + stepProgress) / Math.max(1, livenessSequence.length)) * 100;
                 setLivenessProgress(overall, false);
             } else {
@@ -1053,6 +1165,9 @@
                     blinkState = 'open';
                     earClosedFrames = 0;
                     earOpenFrames = 0;
+                    mouthState = 'closed';
+                    mouthOpenFrames = 0;
+                    mouthClosedFrames = 0;
                 }
                 const stepProgress = Math.min(1, headStableFrames / HEAD_STABLE_FRAMES_REQUIRED);
                 const overall = ((livenessStepIndex + stepProgress) / Math.max(1, livenessSequence.length)) * 100;
@@ -1218,9 +1333,9 @@
                 return;
             }
 
-            if (!isLivenessVerified && matchedEmployee.name !== lastShownName) {
-                if (detectedNameInput) detectedNameInput.value = matchedEmployee.name;
-                lastShownName = matchedEmployee.name;
+            if (!isLivenessVerified) {
+                if (detectedNameInput) detectedNameInput.value = "";
+                lastShownName = "";
             }
 
             if (!candidateEmployee || candidateEmployee.id !== matchedEmployee.id) {
@@ -1241,7 +1356,7 @@
                 return;
             }
 
-            setCaptureReady(false);
+            setCaptureReady(true);
 
             if (result.distance > MAX_ACCEPT_DISTANCE) {
                 updateStatus("Akurasi rendah, hadapkan wajah ke kamera", "warning", INSTRUCTION_HOLD_MS);
@@ -1272,7 +1387,7 @@
 
         async function captureAndDetect() {
             if (isAlreadyAttended) {
-                Swal.fire({
+                safeSwalFire({
                     icon: 'info',
                     title: 'Sudah absen',
                     text: 'Kamu sudah absen hari ini.',
@@ -1282,7 +1397,7 @@
 
             const targetId = recognizedEmployeeId || userIdInput.value;
             if (!targetId) {
-                Swal.fire({
+                safeSwalFire({
                     icon: 'info',
                     title: 'Belum terdeteksi',
                     text: 'Arahkan wajah ke kamera dulu.',
@@ -1291,7 +1406,7 @@
             }
 
             if (!isLivenessVerified) {
-                Swal.fire({
+                safeSwalFire({
                     icon: 'info',
                     title: 'Verifikasi dulu',
                     text: getCurrentInstructionText(),
@@ -1346,7 +1461,7 @@
 
         function submitAttendance() {
             if (!isLivenessVerified || !userIdInput.value) {
-                Swal.fire({
+                safeSwalFire({
                     icon: 'error',
                     title: 'Verifikasi belum lengkap',
                     text: "Ikuti instruksi liveness dulu.",
@@ -1354,12 +1469,14 @@
                 return;
             }
             
-            Swal.fire({
-                title: 'Menyimpan Absensi',
-                text: 'Mohon tunggu sebentar...',
-                allowOutsideClick: false,
-                didOpen: () => Swal.showLoading()
-            });
+            if (window.Swal && typeof Swal.fire === 'function') {
+                Swal.fire({
+                    title: 'Menyimpan Absensi',
+                    text: 'Mohon tunggu sebentar...',
+                    allowOutsideClick: false,
+                    didOpen: () => Swal.showLoading()
+                });
+            }
             document.getElementById('attendanceForm').submit();
         }
 
@@ -1396,6 +1513,9 @@
             livenessSequence = [];
             livenessStepIndex = 0;
             headStableFrames = 0;
+            mouthState = 'closed';
+            mouthOpenFrames = 0;
+            mouthClosedFrames = 0;
             submitBtn.disabled = true;
             setCaptureReady(false);
             userIdInput.value = "";

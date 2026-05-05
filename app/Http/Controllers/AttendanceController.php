@@ -142,7 +142,7 @@ class AttendanceController extends Controller
 
         if ($thresholdValue !== null) {
             if ($confidence < $thresholdValue) {
-                return redirect()->back()->with('error', 'Wajah tidak cocok / terdeteksi sebagai spoof. Silakan coba lagi.');
+                return redirect()->back()->with('error', 'Wajah tidak cocok. Silakan coba lagi.');
             }
         } elseif ($confidence < $minConfidence) {
             return redirect()->back()->with('error', 'Akurasi verifikasi wajah rendah. Silakan coba lagi.');
