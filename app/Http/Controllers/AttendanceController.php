@@ -26,8 +26,10 @@ class AttendanceController extends Controller
             ->whereDate('date', Carbon::today())
             ->first();
 
-        // Get all employees
-        $employees = User::where('role', 'employee')->orderBy('name')->get();
+        $employees = User::select(['id', 'name', 'photo'])
+            ->where('role', 'employee')
+            ->orderBy('name')
+            ->get();
 
         $attendedUserIds = [];
         if ($activeSession) {

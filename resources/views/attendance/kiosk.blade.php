@@ -466,40 +466,85 @@
             @endforeach
         ];
 
-        if (typeof faceapi !== 'undefined') loadModels();
+        if (typeof faceapi !== 'undefined') {
+            updateStatus("Siap Memindai", "info", 0, true);
+        }
 
-        function loadModels() {
-            Promise.all([
-                faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-                faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-                faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
-            ]).then(async () => {
-                labeledFaceDescriptors = await loadLabeledImages();
-                if(labeledFaceDescriptors.length > 0) {
+        async function ensureFaceSystemLoaded() {
+            if (isFaceSystemReady) return true;
+            if (isProcessing) return false;
+            isProcessing = true;
+
+            try {
+                updateStatus("Memuat model wajah...", "info", 0, true);
+
+                await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+                await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+                await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+
+                updateStatus("Menyiapkan data karyawan...", "info", 0, true);
+
+                labeledFaceDescriptors = await loadLabeledDescriptorsFromCacheOrCompute();
+                if (labeledFaceDescriptors.length > 0) {
                     faceMatcher = new faceapi.FaceMatcher(labeledFaceDescriptors, MATCH_THRESHOLD);
                 }
                 isFaceSystemReady = true;
-            }).catch(err => console.error(err));
+                return true;
+            } catch (err) {
+                console.error(err);
+                updateStatus("Gagal memuat model", "danger", 0, true);
+                return false;
+            } finally {
+                isProcessing = false;
+            }
         }
 
-        async function loadLabeledImages() {
-            return Promise.all(
-                employees.map(async (employee) => {
-                    const descriptions = [];
-                    try {
-                        const img = await faceapi.fetchImage(employee.photo);
-                        const detections = await faceapi
-                            .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: MIN_FACE_SCORE }))
-                            .withFaceLandmarks()
-                            .withFaceDescriptor();
-                        if(detections) {
-                            descriptions.push(detections.descriptor);
-                            return new faceapi.LabeledFaceDescriptors(employee.name, descriptions);
-                        }
-                    } catch(e) { console.error(e); }
-                    return null;
-                })
-            ).then(results => results.filter(r => r !== null));
+        function getEmployeesCacheKey() {
+            return 'pms_face_descriptors_v1_' + btoa(unescape(encodeURIComponent(JSON.stringify(employees))));
+        }
+
+        async function loadLabeledDescriptorsFromCacheOrCompute() {
+            const cacheKey = getEmployeesCacheKey();
+            try {
+                const cached = localStorage.getItem(cacheKey);
+                if (cached) {
+                    const parsed = JSON.parse(cached);
+                    return parsed.map(item => new faceapi.LabeledFaceDescriptors(
+                        item.label,
+                        item.descriptors.map(d => new Float32Array(d))
+                    ));
+                }
+            } catch (e) {}
+
+            const results = [];
+            for (let i = 0; i < employees.length; i++) {
+                const employee = employees[i];
+                updateStatus(`Memuat data karyawan ${i + 1}/${employees.length}...`, "info", 0, true);
+                const descriptions = [];
+                try {
+                    const img = await faceapi.fetchImage(employee.photo);
+                    const detections = await faceapi
+                        .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: MIN_FACE_SCORE }))
+                        .withFaceLandmarks()
+                        .withFaceDescriptor();
+                    if (detections) {
+                        descriptions.push(detections.descriptor);
+                        results.push(new faceapi.LabeledFaceDescriptors(employee.name, descriptions));
+                    }
+                } catch (e) {
+                    console.error(e);
+                }
+            }
+
+            try {
+                const toCache = results.map(ld => ({
+                    label: ld.label,
+                    descriptors: ld.descriptors.map(d => Array.from(d))
+                }));
+                localStorage.setItem(cacheKey, JSON.stringify(toCache));
+            } catch (e) {}
+
+            return results;
         }
 
         function openScanner() {
@@ -549,7 +594,10 @@
                         video.srcObject = stream;
                         video.play();
                         updateStatus("Siap Memindai", "info");
-                        video.onplay = () => startScanning();
+                        video.onplay = async () => {
+                            await ensureFaceSystemLoaded();
+                            startScanning();
+                        };
                     })
                     .catch(err => updateStatus("Kamera Error", "danger"));
             }
@@ -702,10 +750,15 @@
             stopScanning();
             
             const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
-            const dataUrl = canvas.toDataURL('image/jpeg');
+            const maxWidth = 640;
+            const srcWidth = video.videoWidth;
+            const srcHeight = video.videoHeight;
+            const ratio = srcWidth ? Math.min(1, maxWidth / srcWidth) : 1;
+            canvas.width = Math.round(srcWidth * ratio);
+            canvas.height = Math.round(srcHeight * ratio);
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
 
             video.style.display = 'none';
             capturedImage.src = dataUrl;
