@@ -1099,7 +1099,7 @@
             if (!livenessSequence.length) initLivenessChallenge();
 
             const step = livenessSequence[livenessStepIndex] || 'blink';
-            setVideoState('recognized');
+            setVideoState('detecting');
 
             if (step === 'blink') {
                 const avgEAR = getAvgEAR(landmarks);
@@ -1166,8 +1166,7 @@
 
             if (!livenessChallengeStartedAt) livenessChallengeStartedAt = now;
             if (now - livenessChallengeStartedAt < MIN_LIVENESS_DURATION_MS) {
-                updateStatus("Memverifikasi...", "info", INSTRUCTION_HOLD_MS);
-                setVideoState('recognized');
+                setVideoState('detecting');
                 return;
             }
 
@@ -1340,6 +1339,7 @@
                 setCaptureReady(false);
                 submitBtn.disabled = true;
                 updateStatus("Sudah absen hari ini", "secondary", INSTRUCTION_HOLD_MS);
+                if (detectedNameInput) detectedNameInput.value = "Sudah absen";
                 stopScanning();
                 return;
             }
@@ -1352,6 +1352,7 @@
                     initLivenessChallenge();
                 }
                 setVideoState('detecting');
+                if (detectedNameInput) detectedNameInput.value = "...";
                 return;
             }
 
@@ -1361,16 +1362,17 @@
                     updateStatus("Posisikan wajah di dalam lingkaran", "warning", INSTRUCTION_HOLD_MS);
                 }
                 setVideoState('detecting');
+                if (detectedNameInput) detectedNameInput.value = "...";
                 return;
             }
 
             if (!isLivenessVerified) {
                 updateStatus("", "info");
-                setVideoState('recognized');
-                setCaptureReady(false);
+                setVideoState('detecting');
             }
 
             updateLiveness(detections);
+            if (!isLivenessVerified && detectedNameInput) detectedNameInput.value = `Kedip ${Math.min(blinkCount, REQUIRED_BLINKS)}/${REQUIRED_BLINKS}`;
         }
 
         async function captureAndDetect() {
