@@ -408,6 +408,12 @@
             opacity: 0.7;
         }
 
+        .btn-gold.is-not-ready {
+            background-color: #333;
+            color: #666;
+            opacity: 0.7;
+        }
+
         /* Mobile Adjustments */
         @media (max-width: 576px) {
             .logo-landing { width: 100px; height: 100px; }
@@ -612,7 +618,9 @@
         const EAR_OPEN_MIN = 0.14;
         const EAR_OPEN_MAX = 0.40;
         const EYE_MOVE_ASYM_THRESHOLD = 0.03;
-        const EYE_MOVE_REQUIRED_FRAMES = 2;
+        const EYE_MOVE_HIGH_FRAMES = 2;
+        const EYE_MOVE_NEUTRAL_FRAMES = 2;
+        const EYE_MOVE_REQUIRED_EVENTS = 1;
         const GAZE_YAW_MAX = 0.20;
         const GAZE_REQUIRED_FRAMES = 6;
         const YAW_TURN_THRESHOLD = 0.18;
@@ -666,7 +674,10 @@
         let earOpenFrames = 0;
         let lastBlinkAt = 0;
         let requiredBlinks = REQUIRED_BLINKS;
-        let eyeMoveFrames = 0;
+        let eyeMoveEventCount = 0;
+        let eyeMoveState = 'neutral';
+        let eyeMoveHighFrames = 0;
+        let eyeMoveNeutralFrames = 0;
         let gazeFrames = 0;
         let earBaseline = null;
         let earBaselineSum = 0;
@@ -935,7 +946,9 @@
 
         function setCaptureReady(ready) {
             if (!captureBtn) return;
-            captureBtn.disabled = !ready;
+            captureBtn.disabled = false;
+            captureBtn.classList.toggle('is-not-ready', !ready);
+            captureBtn.setAttribute('aria-disabled', ready ? 'false' : 'true');
         }
 
         function setLivenessProgress(percent, ok = false) {
@@ -1011,7 +1024,10 @@
             earClosedFrames = 0;
             earOpenFrames = 0;
             lastBlinkAt = 0;
-            eyeMoveFrames = 0;
+            eyeMoveEventCount = 0;
+            eyeMoveState = 'neutral';
+            eyeMoveHighFrames = 0;
+            eyeMoveNeutralFrames = 0;
             gazeFrames = 0;
             earBaseline = null;
             earBaselineSum = 0;
@@ -1129,7 +1145,7 @@
                 updateBlinkState(avgEAR, stable, yaw, now, thresholds.low, thresholds.high);
                 updateEyeMoveState(ears.leftEAR, ears.rightEAR, stable, yaw);
                 updateGazeState(avgEAR, stable, yaw, thresholds.high);
-                if (blinkCount >= requiredBlinks || eyeMoveFrames >= EYE_MOVE_REQUIRED_FRAMES || gazeFrames >= GAZE_REQUIRED_FRAMES) {
+                if (blinkCount >= requiredBlinks || eyeMoveEventCount >= EYE_MOVE_REQUIRED_EVENTS) {
                     livenessStepIndex += 1;
                     headStableFrames = 0;
                     mouthState = 'closed';
@@ -1137,7 +1153,7 @@
                     mouthClosedFrames = 0;
                 }
                 const blinkProgress = Math.min(1, blinkCount / Math.max(1, requiredBlinks));
-                const moveProgress = Math.min(1, eyeMoveFrames / Math.max(1, EYE_MOVE_REQUIRED_FRAMES));
+                const moveProgress = Math.min(1, eyeMoveEventCount / Math.max(1, EYE_MOVE_REQUIRED_EVENTS));
                 const gazeProgress = Math.min(1, gazeFrames / Math.max(1, GAZE_REQUIRED_FRAMES));
                 const stepProgress = Math.max(blinkProgress, moveProgress, gazeProgress);
                 const overall = ((livenessStepIndex + stepProgress) / Math.max(1, livenessSequence.length)) * 100;
@@ -1395,7 +1411,7 @@
             updateLiveness(detections);
             if (!isLivenessVerified && detectedNameInput) {
                 const blinkPart = `Kedip ${Math.min(blinkCount, REQUIRED_BLINKS)}/${REQUIRED_BLINKS}`;
-                const movePart = `Mata ${Math.min(eyeMoveFrames, EYE_MOVE_REQUIRED_FRAMES)}/${EYE_MOVE_REQUIRED_FRAMES}`;
+                const movePart = `Lirik ${Math.min(eyeMoveEventCount, EYE_MOVE_REQUIRED_EVENTS)}/${EYE_MOVE_REQUIRED_EVENTS}`;
                 const gazePart = `Natap ${Math.min(gazeFrames, GAZE_REQUIRED_FRAMES)}/${GAZE_REQUIRED_FRAMES}`;
                 detectedNameInput.value = `${blinkPart} • ${movePart} • ${gazePart}`;
             }
@@ -1403,15 +1419,23 @@
 
         async function captureAndDetect() {
             if (isAlreadyAttended) {
+                if (detectedNameInput) detectedNameInput.value = "Sudah absen";
                 return;
             }
 
             const targetId = recognizedEmployeeId || userIdInput.value;
             if (!targetId) {
+                if (detectedNameInput) detectedNameInput.value = "Arahkan wajah ke kamera";
                 return;
             }
 
             if (!isLivenessVerified) {
+                if (detectedNameInput) {
+                    const blinkPart = `Kedip ${Math.min(blinkCount, REQUIRED_BLINKS)}/${REQUIRED_BLINKS}`;
+                    const movePart = `Mata ${Math.min(eyeMoveFrames, EYE_MOVE_REQUIRED_FRAMES)}/${EYE_MOVE_REQUIRED_FRAMES}`;
+                    const gazePart = `Natap ${Math.min(gazeFrames, GAZE_REQUIRED_FRAMES)}/${GAZE_REQUIRED_FRAMES}`;
+                    detectedNameInput.value = `${blinkPart} • ${movePart} • ${gazePart}`;
+                }
                 return;
             }
 
@@ -1510,7 +1534,10 @@
             earOpenFrames = 0;
             lastBlinkAt = 0;
             requiredBlinks = REQUIRED_BLINKS;
-            eyeMoveFrames = 0;
+            eyeMoveEventCount = 0;
+            eyeMoveState = 'neutral';
+            eyeMoveHighFrames = 0;
+            eyeMoveNeutralFrames = 0;
             gazeFrames = 0;
             earBaseline = null;
             earBaselineSum = 0;
@@ -1585,16 +1612,43 @@
 
         function updateEyeMoveState(leftEAR, rightEAR, isStableFrame, yaw) {
             if (!isStableFrame) {
-                eyeMoveFrames = 0;
+                eyeMoveState = 'neutral';
+                eyeMoveHighFrames = 0;
+                eyeMoveNeutralFrames = 0;
                 return;
             }
             if (Math.abs(yaw) > 0.18) {
-                eyeMoveFrames = 0;
+                eyeMoveState = 'neutral';
+                eyeMoveHighFrames = 0;
+                eyeMoveNeutralFrames = 0;
                 return;
             }
             const asym = Math.abs(leftEAR - rightEAR);
-            if (asym >= EYE_MOVE_ASYM_THRESHOLD) eyeMoveFrames += 1;
-            else eyeMoveFrames = 0;
+            const high = asym >= EYE_MOVE_ASYM_THRESHOLD;
+            const neutral = asym <= (EYE_MOVE_ASYM_THRESHOLD * 0.55);
+
+            if (eyeMoveState === 'neutral') {
+                if (high) eyeMoveHighFrames += 1;
+                else eyeMoveHighFrames = 0;
+
+                if (eyeMoveHighFrames >= EYE_MOVE_HIGH_FRAMES) {
+                    eyeMoveState = 'moved';
+                    eyeMoveNeutralFrames = 0;
+                }
+                return;
+            }
+
+            if (eyeMoveState === 'moved') {
+                if (neutral) eyeMoveNeutralFrames += 1;
+                else eyeMoveNeutralFrames = 0;
+
+                if (eyeMoveNeutralFrames >= EYE_MOVE_NEUTRAL_FRAMES) {
+                    eyeMoveEventCount += 1;
+                    eyeMoveState = 'neutral';
+                    eyeMoveHighFrames = 0;
+                    eyeMoveNeutralFrames = 0;
+                }
+            }
         }
 
         function updateGazeState(avgEAR, isStableFrame, yaw, openThreshold) {
