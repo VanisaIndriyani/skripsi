@@ -156,6 +156,14 @@
             align-items: center;
             justify-content: center;
             padding: 20px;
+            opacity: 0;
+            transform: scale(0.985);
+            transition: opacity 220ms ease, transform 220ms ease;
+        }
+
+        .scan-overlay.is-open {
+            opacity: 1;
+            transform: scale(1);
         }
         
         .scan-container {
@@ -175,6 +183,83 @@
             border: 4px solid var(--primary-color);
             background: #111;
             box-shadow: 0 0 50px rgba(212, 175, 55, 0.2);
+            transition: box-shadow 220ms ease, border-color 220ms ease, transform 220ms ease;
+        }
+
+        .video-container.is-detecting {
+            border-color: rgba(212, 175, 55, 0.9);
+            box-shadow: 0 0 55px rgba(212, 175, 55, 0.35);
+        }
+
+        .video-container.is-locked {
+            border-color: rgba(212, 175, 55, 1);
+            box-shadow: 0 0 70px rgba(212, 175, 55, 0.55);
+        }
+
+        .video-container.is-verified {
+            border-color: rgba(34, 197, 94, 0.95);
+            box-shadow: 0 0 80px rgba(34, 197, 94, 0.5);
+            transform: scale(1.01);
+        }
+
+        .face-guide {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .face-guide::before {
+            content: "";
+            width: 72%;
+            height: 62%;
+            border-radius: 999px;
+            border: 2px dashed rgba(212, 175, 55, 0.55);
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.28) inset;
+            backdrop-filter: blur(0px);
+        }
+
+        .video-container.is-verified .face-guide::before {
+            border-color: rgba(34, 197, 94, 0.65);
+        }
+
+        .success-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at center, rgba(34, 197, 94, 0.22), rgba(0, 0, 0, 0.1));
+            opacity: 0;
+            transform: scale(0.98);
+            pointer-events: none;
+            z-index: 6;
+            transition: opacity 220ms ease, transform 220ms ease;
+        }
+
+        .success-overlay.is-visible {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        .success-check {
+            width: 92px;
+            height: 92px;
+            border-radius: 999px;
+            background: rgba(34, 197, 94, 0.18);
+            border: 2px solid rgba(34, 197, 94, 0.7);
+            box-shadow: 0 0 35px rgba(34, 197, 94, 0.45);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .success-check i {
+            font-size: 2.4rem;
+            color: rgba(34, 197, 94, 0.95);
         }
         
         video, #captured_image {
@@ -221,6 +306,50 @@
             padding: 20px;
             text-align: center;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); /* Stronger shadow */
+        }
+
+        .status-badge #status-text {
+            font-size: 1rem;
+            letter-spacing: 0.2px;
+        }
+
+        .liveness-card {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 12px 12px;
+        }
+
+        .liveness-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .liveness-title {
+            font-weight: 700;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.78);
+        }
+
+        .liveness-value {
+            font-weight: 700;
+            font-size: 0.85rem;
+            color: rgba(212, 175, 55, 0.95);
+        }
+
+        .progress.liveness-progress {
+            height: 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.07);
+            overflow: hidden;
+        }
+
+        .progress-bar.liveness-bar {
+            border-radius: 999px;
+            transition: width 180ms ease;
         }
         
         .status-badge {
@@ -340,20 +469,37 @@
         </div>
 
         <div class="scan-container">
-            <div class="video-container">
+            <div class="video-container" id="videoContainer">
                 <div class="scan-line" id="scanLine"></div>
                 <div class="scan-frame"></div>
+                <div class="face-guide"></div>
                 <video id="video" autoplay muted playsinline></video>
                 <img id="captured_image" src="" alt="Captured Photo">
+                <div class="success-overlay" id="successOverlay">
+                    <div class="success-check">
+                        <i class="fas fa-check"></i>
+                    </div>
+                </div>
             </div>
 
             <div class="scan-info-card">
                 <div id="status-badge" class="status-badge bg-warning text-dark">
                     <i class="fas fa-camera"></i>
                     <span id="status-text">Memulai Kamera...</span>
+                    <span class="spinner-border spinner-border-sm ms-2 d-none" id="statusSpinner" role="status" aria-hidden="true"></span>
                 </div>
                 
                 <input type="text" id="detected_name" class="form-control bg-transparent border-0 text-white text-center fs-4 fw-bold mb-3" readonly placeholder="...">
+                
+                <div class="liveness-card mb-3">
+                    <div class="liveness-meta">
+                        <div class="liveness-title">Liveness</div>
+                        <div class="liveness-value" id="livenessValue">0%</div>
+                    </div>
+                    <div class="progress liveness-progress">
+                        <div class="progress-bar liveness-bar bg-warning" id="livenessBar" style="width: 0%"></div>
+                    </div>
+                </div>
 
                 <form id="attendanceForm" action="{{ route('attendance.storePublic') }}" method="POST">
                     @csrf
@@ -407,6 +553,12 @@
         const captureBtn = document.getElementById('captureBtn');
         const actionButtons = document.getElementById('actionButtons');
         const scanLine = document.getElementById('scanLine');
+        const videoContainer = document.getElementById('videoContainer');
+        const statusSpinner = document.getElementById('statusSpinner');
+        const livenessBar = document.getElementById('livenessBar');
+        const livenessValue = document.getElementById('livenessValue');
+        const successOverlay = document.getElementById('successOverlay');
+        const scanInterface = document.getElementById('scanInterface');
 
         const attendedUserIds = @json($attendedUserIds ?? []);
 
@@ -423,8 +575,12 @@
 
         const MIN_DETECTION_SCORE = 0.6;
         const LIVENESS_TIMEOUT_MS = 10000;
-        const BLINK_LOW_THRESHOLD = 0.21;
-        const BLINK_HIGH_THRESHOLD = 0.23;
+        const MIN_LIVENESS_DURATION_MS = 1500;
+        const REQUIRED_BLINKS = 2;
+        const BLINK_LOW_THRESHOLD = 0.20;
+        const BLINK_HIGH_THRESHOLD = 0.24;
+        const YAW_TURN_THRESHOLD = 0.18;
+        const HEAD_STABLE_FRAMES_REQUIRED = 2;
         const FACE_MISSING_RESET_FRAMES = 8;
         const UNKNOWN_RESET_FRAMES = 8;
         const INSTRUCTION_HOLD_MS = 900;
@@ -459,14 +615,19 @@
         let currentMatchLabel = null;
         let stableMatchFrames = 0;
         let livenessStartedAt = null;
+        let livenessChallengeStartedAt = null;
         let blinkCount = 0;
         let blinkState = 'open';
-        let requiredBlinks = 1;
+        let requiredBlinks = REQUIRED_BLINKS;
+        let livenessSequence = [];
+        let livenessStepIndex = 0;
+        let headStableFrames = 0;
         let missingFaceFrames = 0;
         let unknownFaceFrames = 0;
         let lastShownName = "";
 
         setCaptureReady(false);
+        setLivenessProgress(0, false);
 
         const OFFICE_LAT = {{ \App\Models\Setting::get('office_latitude', 0) }};
         const OFFICE_LNG = {{ \App\Models\Setting::get('office_longitude', 0) }};
@@ -608,7 +769,8 @@
                     } else {
                         Swal.close();
                         document.getElementById('landingPage').classList.add('d-none');
-                        document.getElementById('scanInterface').style.display = 'flex';
+                        scanInterface.style.display = 'flex';
+                        requestAnimationFrame(() => scanInterface.classList.add('is-open'));
                         startVideo();
                     }
                 }, error => {
@@ -620,7 +782,8 @@
         function closeScanner() {
             stopVideo();
             stopScanning();
-            document.getElementById('scanInterface').style.display = 'none';
+            scanInterface.classList.remove('is-open');
+            setTimeout(() => { scanInterface.style.display = 'none'; }, 230);
             document.getElementById('landingPage').classList.remove('d-none');
             resetCamera();
         }
@@ -648,6 +811,8 @@
                         };
                         video.onplaying = () => {
                             updateStatus("Siap Memindai", "info", 0, true);
+                            setVideoState('detecting');
+                            initLivenessChallenge();
                             ensureMatcherReady();
                             startScanning();
                         };
@@ -676,17 +841,87 @@
             lastStatusText = text;
             lastStatusType = type;
             statusHoldUntil = holdMs > 0 ? now + holdMs : 0;
+            const shouldSpin = type === 'info' || text.includes('Memuat') || text.includes('Menyiapkan') || text.includes('Memverifikasi');
+            if (statusSpinner) statusSpinner.classList.toggle('d-none', !shouldSpin);
         }
 
         function setCaptureReady(ready) {
             captureBtn.disabled = !ready;
         }
 
+        function setLivenessProgress(percent, ok = false) {
+            const p = Math.max(0, Math.min(100, Math.round(percent)));
+            if (livenessBar) livenessBar.style.width = `${p}%`;
+            if (livenessValue) livenessValue.textContent = `${p}%`;
+            if (livenessBar) {
+                livenessBar.classList.toggle('bg-success', ok);
+                livenessBar.classList.toggle('bg-warning', !ok);
+            }
+        }
+
+        function setVideoState(state) {
+            if (!videoContainer) return;
+            videoContainer.classList.toggle('is-detecting', state === 'detecting');
+            videoContainer.classList.toggle('is-locked', state === 'locked');
+            videoContainer.classList.toggle('is-verified', state === 'verified');
+        }
+
+        function playSuccessBeep() {
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (!AudioCtx) return;
+                const ctx = new AudioCtx();
+                const o = ctx.createOscillator();
+                const g = ctx.createGain();
+                o.type = 'sine';
+                o.frequency.value = 880;
+                g.gain.value = 0.0001;
+                o.connect(g);
+                g.connect(ctx.destination);
+                o.start();
+                g.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + 0.02);
+                g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.18);
+                o.stop(ctx.currentTime + 0.2);
+                setTimeout(() => ctx.close(), 350);
+            } catch (e) {}
+        }
+
         function initLivenessChallenge() {
-            requiredBlinks = 1;
+            const headStep = Math.random() < 0.5 ? 'left' : 'right';
+            livenessSequence = Math.random() < 0.5 ? ['blink', headStep] : [headStep, 'blink'];
+            livenessStepIndex = 0;
+            headStableFrames = 0;
+
+            requiredBlinks = REQUIRED_BLINKS;
             blinkCount = 0;
             blinkState = 'open';
             livenessStartedAt = null;
+            livenessChallengeStartedAt = Date.now();
+            setLivenessProgress(0, false);
+            if (successOverlay) successOverlay.classList.remove('is-visible');
+        }
+
+        function getYaw(landmarks) {
+            const leftEye = landmarks.getLeftEye();
+            const rightEye = landmarks.getRightEye();
+            if (!leftEye?.length || !rightEye?.length) return 0;
+
+            const leftCenter = averagePoints(leftEye);
+            const rightCenter = averagePoints(rightEye);
+            const midEye = { x: (leftCenter.x + rightCenter.x) / 2, y: (leftCenter.y + rightCenter.y) / 2 };
+            const interEye = distance(leftCenter, rightCenter);
+            const nose = landmarks.getNose();
+            const noseTip = nose && nose.length ? nose[Math.min(3, nose.length - 1)] : midEye;
+            if (!interEye) return 0;
+            return (noseTip.x - midEye.x) / interEye;
+        }
+
+        function getCurrentInstructionText() {
+            const step = livenessSequence[livenessStepIndex] || 'blink';
+            if (step === 'blink') return `Kedipkan mata ${REQUIRED_BLINKS}x`;
+            if (step === 'left') return 'Lihat kiri';
+            if (step === 'right') return 'Lihat kanan';
+            return 'Arahkan wajah ke kamera';
         }
 
         function updateLiveness(landmarks) {
@@ -696,10 +931,53 @@
                 initLivenessChallenge();
                 livenessStartedAt = now;
             }
-            updateStatus("Kedipkan mata", "warning", INSTRUCTION_HOLD_MS);
-            const avgEAR = getAvgEAR(landmarks);
-            updateBlinkState(avgEAR);
-            if (blinkCount >= 1) verifyLiveness();
+
+            if (!livenessSequence.length) initLivenessChallenge();
+
+            const step = livenessSequence[livenessStepIndex] || 'blink';
+            updateStatus(getCurrentInstructionText(), "warning", INSTRUCTION_HOLD_MS);
+            setVideoState('locked');
+
+            if (step === 'blink') {
+                const avgEAR = getAvgEAR(landmarks);
+                updateBlinkState(avgEAR);
+                if (blinkCount >= requiredBlinks) {
+                    livenessStepIndex += 1;
+                    headStableFrames = 0;
+                }
+                const stepProgress = Math.min(1, blinkCount / requiredBlinks);
+                const overall = ((livenessStepIndex + stepProgress) / Math.max(1, livenessSequence.length)) * 100;
+                setLivenessProgress(overall, false);
+            } else {
+                const yaw = getYaw(landmarks);
+                const ok =
+                    (step === 'left' && yaw <= -YAW_TURN_THRESHOLD) ||
+                    (step === 'right' && yaw >= YAW_TURN_THRESHOLD);
+
+                if (ok) headStableFrames += 1;
+                else headStableFrames = 0;
+
+                if (headStableFrames >= HEAD_STABLE_FRAMES_REQUIRED) {
+                    livenessStepIndex += 1;
+                    headStableFrames = 0;
+                    blinkCount = 0;
+                    blinkState = 'open';
+                }
+                const stepProgress = Math.min(1, headStableFrames / HEAD_STABLE_FRAMES_REQUIRED);
+                const overall = ((livenessStepIndex + stepProgress) / Math.max(1, livenessSequence.length)) * 100;
+                setLivenessProgress(overall, false);
+            }
+
+            if (livenessStepIndex < livenessSequence.length) return;
+
+            if (!livenessChallengeStartedAt) livenessChallengeStartedAt = now;
+            if (now - livenessChallengeStartedAt < MIN_LIVENESS_DURATION_MS) {
+                updateStatus("Memverifikasi...", "info", INSTRUCTION_HOLD_MS);
+                setVideoState('locked');
+                return;
+            }
+
+            verifyLiveness();
         }
 
         function startScanning() {
@@ -734,6 +1012,7 @@
             if (!isFaceSystemReady) {
                 setCaptureReady(false);
                 if (!isLivenessVerified) updateStatus("Memuat model wajah...", "info", 0, true);
+                setVideoState('detecting');
                 ensureModelsLoaded();
                 return;
             }
@@ -741,6 +1020,7 @@
             if (!faceMatcher) {
                 setCaptureReady(false);
                 if (!isLivenessVerified) updateStatus("Menyiapkan data karyawan...", "info", 0, true);
+                setVideoState('detecting');
                 ensureMatcherReady();
                 return;
             }
@@ -759,10 +1039,14 @@
             if (!detections) {
                 setCaptureReady(false);
                 missingFaceFrames += 1;
+                if (!isLivenessVerified && candidateEmployee && missingFaceFrames >= 3) {
+                    initLivenessChallenge();
+                }
                 if (missingFaceFrames >= FACE_MISSING_RESET_FRAMES) resetMatchState();
                 if (!isLivenessVerified) {
                     detectedNameInput.value = "";
                     updateStatus("Arahkan wajah ke kamera", "info");
+                    setVideoState('detecting');
                 }
                 return;
             }
@@ -770,6 +1054,7 @@
             if (detections.detection && detections.detection.score < MIN_DETECTION_SCORE) {
                 setCaptureReady(false);
                 updateStatus("Arahkan wajah ke kamera", "warning", INSTRUCTION_HOLD_MS);
+                setVideoState('detecting');
                 return;
             }
 
@@ -777,10 +1062,14 @@
             if (result.label === 'unknown' || result.distance > MATCH_THRESHOLD) {
                 setCaptureReady(false);
                 unknownFaceFrames += 1;
+                if (!isLivenessVerified && candidateEmployee && unknownFaceFrames >= 3) {
+                    initLivenessChallenge();
+                }
                 if (unknownFaceFrames >= UNKNOWN_RESET_FRAMES) resetMatchState();
                 if (!isLivenessVerified) {
                     detectedNameInput.value = "";
                     updateStatus("Wajah Tidak Dikenal", "warning", INSTRUCTION_HOLD_MS);
+                    setVideoState('detecting');
                 }
                 return;
             }
@@ -797,6 +1086,7 @@
 
             if (stableMatchFrames < STABLE_FRAMES_REQUIRED) {
                 if (!isLivenessVerified) updateStatus("Mendeteksi wajah...", "info");
+                setVideoState('detecting');
                 return;
             }
 
@@ -832,6 +1122,10 @@
 
             if (result.distance > MAX_ACCEPT_DISTANCE) {
                 updateStatus("Akurasi rendah, hadapkan wajah ke kamera", "warning", INSTRUCTION_HOLD_MS);
+                if (!isLivenessVerified && candidateEmployee) {
+                    initLivenessChallenge();
+                }
+                setVideoState('detecting');
                 return;
             }
 
@@ -888,7 +1182,8 @@
             resetMatchState();
             initLivenessChallenge();
             updateStatus("Siap Memindai", "info");
-            startScanning();
+            setVideoState('detecting');
+            if (scanInterface && scanInterface.style.display !== 'none') startScanning();
         }
 
         function submitAttendance() {
@@ -932,7 +1227,11 @@
             if (!keepStartTime) livenessStartedAt = null;
             blinkCount = 0;
             blinkState = 'open';
-            requiredBlinks = 1;
+            requiredBlinks = REQUIRED_BLINKS;
+            livenessChallengeStartedAt = null;
+            livenessSequence = [];
+            livenessStepIndex = 0;
+            headStableFrames = 0;
             submitBtn.disabled = true;
             setCaptureReady(false);
             userIdInput.value = "";
@@ -948,6 +1247,10 @@
             setCaptureReady(true);
             scanLine.style.animationPlayState = 'paused';
             updateStatus("Wajah terverifikasi", "success");
+            setVideoState('verified');
+            setLivenessProgress(100, true);
+            if (successOverlay) successOverlay.classList.add('is-visible');
+            playSuccessBeep();
             stopScanning();
         }
 
@@ -974,6 +1277,17 @@
                 blinkState = 'open';
                 blinkCount += 1;
             }
+        }
+
+        function averagePoints(points) {
+            let x = 0;
+            let y = 0;
+            for (let i = 0; i < points.length; i++) {
+                x += points[i].x;
+                y += points[i].y;
+            }
+            const len = points.length || 1;
+            return { x: x / len, y: y / len };
         }
 
         function distance(a, b) {
