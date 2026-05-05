@@ -412,9 +412,9 @@
 
         const MODEL_URL = "{{ asset('models') }}";
 
-        const DETECTION_INTERVAL_MS = 110;
-        const VIDEO_INPUT_SIZE = 128;
-        const VIDEO_SCORE_THRESHOLD = 0.5;
+        const DETECTION_INTERVAL_MS = 90;
+        const VIDEO_INPUT_SIZE = 96;
+        const VIDEO_SCORE_THRESHOLD = 0.55;
         const PHOTO_INPUT_SIZE = 160;
 
         const MATCH_THRESHOLD = 0.48;
@@ -422,14 +422,9 @@
         const STABLE_FRAMES_REQUIRED = 2;
 
         const MIN_DETECTION_SCORE = 0.6;
-        const LIVENESS_TIMEOUT_MS = 12000;
-        const MIN_REQUIRED_BLINKS = 1;
-        const MAX_REQUIRED_BLINKS = 1;
+        const LIVENESS_TIMEOUT_MS = 10000;
         const BLINK_LOW_THRESHOLD = 0.21;
         const BLINK_HIGH_THRESHOLD = 0.23;
-        const YAW_TURN_THRESHOLD = 0.18;
-        const YAW_CENTER_THRESHOLD = 0.08;
-        const HEAD_STABLE_FRAMES_REQUIRED = 2;
         const FACE_MISSING_RESET_FRAMES = 8;
         const UNKNOWN_RESET_FRAMES = 8;
         const INSTRUCTION_HOLD_MS = 900;
@@ -467,10 +462,6 @@
         let blinkCount = 0;
         let blinkState = 'open';
         let requiredBlinks = 1;
-        let livenessStep = 'blink';
-        let headSequence = ['left', 'right'];
-        let headSequenceIndex = 0;
-        let headStableFrames = 0;
         let missingFaceFrames = 0;
         let unknownFaceFrames = 0;
         let lastShownName = "";
@@ -692,38 +683,10 @@
         }
 
         function initLivenessChallenge() {
-            requiredBlinks = MIN_REQUIRED_BLINKS + Math.floor(Math.random() * (MAX_REQUIRED_BLINKS - MIN_REQUIRED_BLINKS + 1));
-            headSequence = Math.random() < 0.5 ? ['left', 'right'] : ['right', 'left'];
-            livenessStep = 'blink';
-            headSequenceIndex = 0;
-            headStableFrames = 0;
+            requiredBlinks = 1;
             blinkCount = 0;
             blinkState = 'open';
             livenessStartedAt = null;
-        }
-
-        function getYaw(landmarks) {
-            const leftEye = landmarks.getLeftEye();
-            const rightEye = landmarks.getRightEye();
-            const leftCenter = averagePoint(leftEye);
-            const rightCenter = averagePoint(rightEye);
-            const midEye = { x: (leftCenter.x + rightCenter.x) / 2, y: (leftCenter.y + rightCenter.y) / 2 };
-            const interEye = distance(leftCenter, rightCenter);
-            const nose = landmarks.getNose();
-            const noseTip = nose && nose.length ? nose[Math.min(3, nose.length - 1)] : midEye;
-            if (!interEye) return 0;
-            return (noseTip.x - midEye.x) / interEye;
-        }
-
-        function getCurrentInstructionText() {
-            if (livenessStep === 'blink') return `Kedipkan mata ${requiredBlinks}x`;
-            if (livenessStep === 'head') {
-                const dir = headSequence[headSequenceIndex];
-                if (dir === 'left') return 'Gerakkan kepala ke kiri';
-                if (dir === 'right') return 'Gerakkan kepala ke kanan';
-                return 'Gerakkan kepala';
-            }
-            return 'Arahkan wajah ke kamera';
         }
 
         function updateLiveness(landmarks) {
@@ -733,46 +696,10 @@
                 initLivenessChallenge();
                 livenessStartedAt = now;
             }
-
-            if (livenessStep === 'blink') {
-                updateStatus(getCurrentInstructionText(), "warning", INSTRUCTION_HOLD_MS);
-                const avgEAR = getAvgEAR(landmarks);
-                updateBlinkState(avgEAR);
-                if (blinkCount >= requiredBlinks) {
-                    livenessStep = 'head';
-                    headStableFrames = 0;
-                }
-                return;
-            }
-
-            if (livenessStep === 'head') {
-                const yaw = getYaw(landmarks);
-                const dir = headSequence[headSequenceIndex];
-                updateStatus(getCurrentInstructionText(), "warning", INSTRUCTION_HOLD_MS);
-
-                if (Math.abs(yaw) <= YAW_CENTER_THRESHOLD) {
-                    headStableFrames = 0;
-                    return;
-                }
-
-                const ok =
-                    (dir === 'left' && yaw <= -YAW_TURN_THRESHOLD) ||
-                    (dir === 'right' && yaw >= YAW_TURN_THRESHOLD);
-
-                if (ok) {
-                    headStableFrames += 1;
-                } else {
-                    headStableFrames = 0;
-                }
-
-                if (headStableFrames >= HEAD_STABLE_FRAMES_REQUIRED) {
-                    headSequenceIndex += 1;
-                    headStableFrames = 0;
-                    if (headSequenceIndex >= headSequence.length) {
-                        verifyLiveness();
-                    }
-                }
-            }
+            updateStatus("Kedipkan mata", "warning", INSTRUCTION_HOLD_MS);
+            const avgEAR = getAvgEAR(landmarks);
+            updateBlinkState(avgEAR);
+            if (blinkCount >= 1) verifyLiveness();
         }
 
         function startScanning() {
@@ -1005,11 +932,7 @@
             if (!keepStartTime) livenessStartedAt = null;
             blinkCount = 0;
             blinkState = 'open';
-            requiredBlinks = MIN_REQUIRED_BLINKS;
-            livenessStep = 'blink';
-            headSequence = ['left', 'right'];
-            headSequenceIndex = 0;
-            headStableFrames = 0;
+            requiredBlinks = 1;
             submitBtn.disabled = true;
             setCaptureReady(false);
             userIdInput.value = "";
