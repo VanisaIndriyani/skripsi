@@ -414,6 +414,28 @@
             opacity: 0.7;
         }
 
+        .mini-instruction {
+            display: none;
+            margin: 6px auto 14px;
+            width: fit-content;
+            max-width: 100%;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: rgba(212, 175, 55, 0.12);
+            border: 1px solid rgba(212, 175, 55, 0.25);
+            color: rgba(255, 255, 255, 0.92);
+            font-weight: 700;
+            font-size: 0.9rem;
+            letter-spacing: 0.2px;
+            text-align: center;
+        }
+
+        .mini-instruction.is-visible {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
         /* Mobile Adjustments */
         @media (max-width: 576px) {
             .logo-landing { width: 100px; height: 100px; }
@@ -519,6 +541,11 @@
                 </div>
                 
                 <input type="text" id="detected_name" class="form-control bg-transparent border-0 text-white text-center fs-4 fw-bold mb-3" readonly placeholder="...">
+
+                <div id="instructionToast" class="mini-instruction">
+                    <i class="fas fa-eye"></i>
+                    <span id="instructionText">Silakan kedip</span>
+                </div>
                 
                 <div class="liveness-card mb-3">
                     <div class="liveness-meta">
@@ -588,6 +615,8 @@
         const livenessValue = document.getElementById('livenessValue');
         const successOverlay = document.getElementById('successOverlay');
         const scanInterface = document.getElementById('scanInterface');
+        const instructionToast = document.getElementById('instructionToast');
+        const instructionText = document.getElementById('instructionText');
         const SILENT_NOTIFICATIONS = true;
 
         const attendedUserIds = @json($attendedUserIds ?? []);
@@ -694,6 +723,7 @@
         let recognizedEmployeeId = "";
         let recognizedEmployeeName = "";
         let lastFaceBox = null;
+        let lastInstructionShown = "";
 
         setCaptureReady(false);
         setLivenessProgress(0, false);
@@ -967,6 +997,22 @@
             return Promise.resolve();
         }
 
+        function showInstruction(text) {
+            if (!instructionToast || !instructionText) return;
+            const t = String(text || '').trim();
+            if (!t) return hideInstruction();
+            if (t === lastInstructionShown && instructionToast.classList.contains('is-visible')) return;
+            instructionText.textContent = t;
+            instructionToast.classList.add('is-visible');
+            lastInstructionShown = t;
+        }
+
+        function hideInstruction() {
+            if (!instructionToast) return;
+            instructionToast.classList.remove('is-visible');
+            lastInstructionShown = "";
+        }
+
         function setCaptureReady(ready) {
             if (!captureBtn) return;
             captureBtn.disabled = false;
@@ -1159,6 +1205,11 @@
             setVideoState('detecting');
 
             if (step === 'blink') {
+                if (!isLivenessVerified && blinkCount < requiredBlinks && eyeMoveEventCount < EYE_MOVE_REQUIRED_EVENTS) {
+                    showInstruction('Silakan kedip');
+                } else {
+                    hideInstruction();
+                }
                 const ears = getEyeEARs(landmarks);
                 const avgEAR = ears.avgEAR;
                 const stable = isFaceStable(detections.detection?.box);
@@ -1182,6 +1233,7 @@
                 const overall = ((livenessStepIndex + stepProgress) / Math.max(1, livenessSequence.length)) * 100;
                 setLivenessProgress(overall, false);
             } else if (step === 'mouth') {
+                hideInstruction();
                 const stable = isFaceStable(detections.detection?.box);
                 const yaw = getYaw(landmarks);
                 const mar = getMAR(landmarks);
@@ -1202,6 +1254,7 @@
                 const overall = ((livenessStepIndex + stepProgress) / Math.max(1, livenessSequence.length)) * 100;
                 setLivenessProgress(overall, false);
             } else {
+                hideInstruction();
                 const yaw = getYaw(landmarks);
                 const ok =
                     (step === 'left' && yaw <= -YAW_TURN_THRESHOLD) ||
@@ -1291,6 +1344,10 @@
         async function runDetectionFrame() {
             if (isProcessing) return;
             if (isDetecting) return;
+            if (isLivenessVerified) {
+                setCaptureReady(true);
+                return;
+            }
 
             if (!isFaceSystemReady) {
                 setCaptureReady(false);
@@ -1321,6 +1378,7 @@
 
             if (!detections) {
                 setCaptureReady(false);
+                hideInstruction();
                 missingFaceFrames += 1;
                 if (!isLivenessVerified && candidateEmployee && missingFaceFrames >= 3) {
                     initLivenessChallenge();
@@ -1336,6 +1394,7 @@
 
             if (detections.detection && detections.detection.score < MIN_DETECTION_SCORE) {
                 setCaptureReady(false);
+                hideInstruction();
                 if (!isLivenessVerified && isFaceCentered(detections)) {
                     updateStatus("", "info");
                 } else {
@@ -1348,6 +1407,7 @@
             const result = faceMatcher.findBestMatch(detections.descriptor);
             if (result.label === 'unknown' || result.distance > MATCH_THRESHOLD) {
                 setCaptureReady(false);
+                hideInstruction();
                 unknownFaceFrames += 1;
                 if (!isLivenessVerified && candidateEmployee && unknownFaceFrames >= 3) {
                     initLivenessChallenge();
@@ -1422,6 +1482,7 @@
                     updateStatus("Posisikan wajah di dalam lingkaran", "warning", INSTRUCTION_HOLD_MS);
                 }
                 setVideoState('detecting');
+                hideInstruction();
                 if (detectedNameInput) detectedNameInput.value = `${recognizedEmployeeName || matchedEmployee.name} • Posisikan di lingkaran`;
                 return;
             }
@@ -1506,6 +1567,7 @@
             initLivenessChallenge();
             updateStatus("Siap Memindai", "info");
             setVideoState('detecting');
+            hideInstruction();
             if (scanInterface && scanInterface.style.display !== 'none') startScanning();
         }
 
@@ -1547,6 +1609,7 @@
                 submitBtn.disabled = true;
                 scanLine.style.animationPlayState = 'running';
                 initLivenessChallenge();
+                hideInstruction();
             }
         }
 
@@ -1579,6 +1642,7 @@
             userIdInput.value = "";
             if (detectedNameInput) detectedNameInput.value = "";
             scanLine.style.animationPlayState = 'running';
+            hideInstruction();
         }
 
         function verifyLiveness() {
@@ -1595,6 +1659,7 @@
             if (successOverlay) successOverlay.classList.add('is-visible');
             playSuccessBeep();
             stopScanning();
+            hideInstruction();
         }
 
         function getEyeEARs(landmarks) {
