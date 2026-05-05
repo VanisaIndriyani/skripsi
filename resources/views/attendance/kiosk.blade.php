@@ -594,7 +594,7 @@
         const PHOTO_INPUT_SIZE = 160;
 
         const MATCH_THRESHOLD = 0.48;
-        const MAX_ACCEPT_DISTANCE = 0.44;
+        const MAX_ACCEPT_DISTANCE = 0.52;
         const STABLE_FRAMES_REQUIRED = 2;
 
         const MIN_DETECTION_SCORE = 0.5;
@@ -613,8 +613,8 @@
         const EAR_OPEN_MAX = 0.40;
         const EYE_MOVE_ASYM_THRESHOLD = 0.03;
         const EYE_MOVE_REQUIRED_FRAMES = 2;
-        const GAZE_YAW_MAX = 0.12;
-        const GAZE_REQUIRED_FRAMES = 10;
+        const GAZE_YAW_MAX = 0.20;
+        const GAZE_REQUIRED_FRAMES = 6;
         const YAW_TURN_THRESHOLD = 0.18;
         const HEAD_STABLE_FRAMES_REQUIRED = 2;
         const REQUIRE_MOUTH_STEP = false;
@@ -988,8 +988,8 @@
                 const faceCenterX = box.x + box.width / 2;
                 const faceCenterY = box.y + box.height / 2;
 
-                const toleranceX = videoWidth * 0.28;
-                const toleranceY = videoHeight * 0.28;
+                const toleranceX = videoWidth * 0.33;
+                const toleranceY = videoHeight * 0.33;
 
                 return (
                     Math.abs(faceCenterX - centerX) < toleranceX &&
@@ -1374,12 +1374,7 @@
 
             if (result.distance > MAX_ACCEPT_DISTANCE) {
                 updateStatus("Akurasi rendah, hadapkan wajah ke kamera", "warning", INSTRUCTION_HOLD_MS);
-                if (!isLivenessVerified && candidateEmployee) {
-                    initLivenessChallenge();
-                }
                 setVideoState('detecting');
-                if (detectedNameInput) detectedNameInput.value = "...";
-                return;
             }
 
             if (!isFaceCentered(detections)) {
@@ -1611,7 +1606,8 @@
                 gazeFrames = 0;
                 return;
             }
-            if (avgEAR <= openThreshold) {
+            const minOpen = Math.max(EAR_OPEN_MIN, openThreshold * 0.85);
+            if (avgEAR <= minOpen) {
                 gazeFrames = 0;
                 return;
             }
