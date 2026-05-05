@@ -405,13 +405,22 @@
         /* Mobile Adjustments */
         @media (max-width: 576px) {
             .clock-widget { font-size: 4rem; }
-            .scan-container { padding: 10px; margin: auto; } /* Added margin: auto */
+            .scan-container {
+                padding: 10px;
+                margin: auto;
+                min-height: 100vh;
+                justify-content: center;
+            }
             .video-container { border-radius: 30px; }
             .scan-info-card { padding: 15px; } /* Adjusted padding for smaller screens */
             .scan-overlay {
                 overflow-y: auto; /* Allow scrolling on small screens */
                 align-items: flex-start; /* Align to top instead of center */
                 padding: 40px 15px; /* More vertical padding */
+            }
+            #detected_name,
+            .liveness-card {
+                display: none !important;
             }
         }
     </style>
@@ -508,8 +517,8 @@
                     <input type="hidden" name="user_id" id="user_id">
 
                     <div class="d-grid gap-2">
-                        <button type="button" id="captureBtn" onClick="captureAndDetect()" class="btn btn-gold rounded-pill py-3">
-                            <i class="fas fa-camera me-2"></i> AMBIL FOTO
+                        <button type="button" id="captureBtn" onClick="captureAndDetect()" class="btn btn-gold rounded-pill py-3 w-100">
+                            <i class="fas fa-check me-2"></i> ABSEN SEKARANG
                         </button>
                         <div id="actionButtons" class="d-none d-flex gap-2">
                             <button type="button" onClick="resetCamera()" class="btn btn-outline-light w-50 rounded-pill py-3">ULANG</button>
@@ -836,6 +845,15 @@
             const now = Date.now();
             if (!force && now < statusHoldUntil) return;
             if (text === lastStatusText && type === lastStatusType) return;
+            if (text === "") {
+                if (statusBadge) statusBadge.style.display = "none";
+                if (statusSpinner) statusSpinner.classList.add('d-none');
+                lastStatusText = text;
+                lastStatusType = type;
+                statusHoldUntil = holdMs > 0 ? now + holdMs : 0;
+                return;
+            }
+            if (statusBadge) statusBadge.style.display = "inline-flex";
             statusText.innerText = text;
             statusBadge.className = `status-badge bg-${type} ${type === 'warning' ? 'text-dark' : 'text-white'}`;
             lastStatusText = text;
@@ -884,6 +902,31 @@
                 o.stop(ctx.currentTime + 0.2);
                 setTimeout(() => ctx.close(), 350);
             } catch (e) {}
+        }
+
+        function isFaceCentered(detections) {
+            try {
+                const box = detections.detection.box;
+                const videoWidth = video.videoWidth;
+                const videoHeight = video.videoHeight;
+                if (!videoWidth || !videoHeight) return false;
+
+                const centerX = videoWidth / 2;
+                const centerY = videoHeight / 2;
+
+                const faceCenterX = box.x + box.width / 2;
+                const faceCenterY = box.y + box.height / 2;
+
+                const toleranceX = videoWidth * 0.2;
+                const toleranceY = videoHeight * 0.2;
+
+                return (
+                    Math.abs(faceCenterX - centerX) < toleranceX &&
+                    Math.abs(faceCenterY - centerY) < toleranceY
+                );
+            } catch (e) {
+                return false;
+            }
         }
 
         function initLivenessChallenge() {
@@ -1044,7 +1087,7 @@
                 }
                 if (missingFaceFrames >= FACE_MISSING_RESET_FRAMES) resetMatchState();
                 if (!isLivenessVerified) {
-                    detectedNameInput.value = "";
+                    if (detectedNameInput) detectedNameInput.value = "";
                     updateStatus("Arahkan wajah ke kamera", "info");
                     setVideoState('detecting');
                 }
@@ -1067,7 +1110,7 @@
                 }
                 if (unknownFaceFrames >= UNKNOWN_RESET_FRAMES) resetMatchState();
                 if (!isLivenessVerified) {
-                    detectedNameInput.value = "";
+                    if (detectedNameInput) detectedNameInput.value = "";
                     updateStatus("Wajah Tidak Dikenal", "warning", INSTRUCTION_HOLD_MS);
                     setVideoState('detecting');
                 }
@@ -1098,7 +1141,7 @@
             }
 
             if (matchedEmployee.name !== lastShownName) {
-                detectedNameInput.value = matchedEmployee.name;
+                if (detectedNameInput) detectedNameInput.value = matchedEmployee.name;
                 lastShownName = matchedEmployee.name;
             }
 
@@ -1129,6 +1172,16 @@
                 return;
             }
 
+            if (!isFaceCentered(detections)) {
+                if (!isLivenessVerified) {
+                    initLivenessChallenge();
+                    updateStatus("Posisikan wajah di dalam lingkaran", "warning", INSTRUCTION_HOLD_MS);
+                }
+                setVideoState('detecting');
+                return;
+            }
+
+            if (!isLivenessVerified) updateStatus("", "info");
             updateLiveness(detections.landmarks);
         }
 
@@ -1172,7 +1225,7 @@
             capturedImage.style.display = 'none';
             captureBtn.classList.remove('d-none');
             actionButtons.classList.add('d-none');
-            detectedNameInput.value = "";
+            if (detectedNameInput) detectedNameInput.value = "";
             userIdInput.value = "";
             submitBtn.disabled = true;
             scanLine.style.animationPlayState = 'running';
@@ -1214,7 +1267,7 @@
             if (!isLivenessVerified) {
                 isAlreadyAttended = false;
                 candidateEmployee = null;
-                detectedNameInput.value = "";
+                if (detectedNameInput) detectedNameInput.value = "";
                 userIdInput.value = "";
                 submitBtn.disabled = true;
                 scanLine.style.animationPlayState = 'running';
@@ -1241,7 +1294,7 @@
         function verifyLiveness() {
             if (!candidateEmployee) return;
             isLivenessVerified = true;
-            detectedNameInput.value = candidateEmployee.name;
+            if (detectedNameInput) detectedNameInput.value = candidateEmployee.name;
             userIdInput.value = candidateEmployee.id;
             submitBtn.disabled = true;
             setCaptureReady(true);
