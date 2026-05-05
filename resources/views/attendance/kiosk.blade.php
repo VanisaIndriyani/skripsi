@@ -1218,13 +1218,17 @@
                 return;
             }
 
+            if (!isLivenessVerified && matchedEmployee.name !== lastShownName) {
+                if (detectedNameInput) detectedNameInput.value = matchedEmployee.name;
+                lastShownName = matchedEmployee.name;
+            }
+
             if (!candidateEmployee || candidateEmployee.id !== matchedEmployee.id) {
                 candidateEmployee = matchedEmployee;
                 isAlreadyAttended = attendedUserIds.includes(String(matchedEmployee.id));
                 initLivenessChallenge();
                 recognizedEmployeeId = String(candidateEmployee.id);
                 recognizedEmployeeName = candidateEmployee.name;
-                lastShownName = recognizedEmployeeName;
             }
 
             if (isLivenessVerified) return;
