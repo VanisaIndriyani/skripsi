@@ -423,7 +423,7 @@
         let livenessStartedAt = null;
         let blinkCount = 0;
         let blinkState = 'open';
-        let requiredBlinks = MIN_REQUIRED_BLINKS;
+        let requiredBlinks = 1;
         let livenessStep = 'blink';
         let headSequence = ['left', 'right'];
         let headSequenceIndex = 0;
