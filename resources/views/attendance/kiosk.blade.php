@@ -362,7 +362,7 @@
                     <input type="hidden" name="user_id" id="user_id">
 
                     <div class="d-grid gap-2">
-                        <button type="button" id="captureBtn" class="btn btn-gold rounded-pill py-3">
+                        <button type="button" id="captureBtn" onClick="captureAndDetect()" class="btn btn-gold rounded-pill py-3">
                             <i class="fas fa-camera me-2"></i> AMBIL FOTO
                         </button>
                         <div id="actionButtons" class="d-none d-flex gap-2">
@@ -415,7 +415,6 @@
         let isDetecting = false;
         let detectionInterval = null;
         let isProcessing = false;
-        let isStartingCamera = false;
         let isLivenessVerified = false;
         let isAlreadyAttended = false;
         let candidateEmployee = null;
@@ -441,20 +440,8 @@
         const INSTRUCTION_HOLD_MS = 2500;
         const BLINK_INSTRUCTION_TEXT = `Kedip ${REQUIRED_BLINKS}x untuk verifikasi`;
         const MODEL_URL = "{{ asset('models') }}";
-        const CAMERA_START_TIMEOUT_MS = 7000;
-        let cameraStartTimeoutHandle = null;
 
         setCaptureReady(false);
-        captureBtn.disabled = false;
-        captureBtn.innerHTML = '<i class="fas fa-camera me-2"></i> MULAI KAMERA';
-
-        captureBtn.addEventListener('click', function () {
-            if (!stream) {
-                startVideo();
-                return;
-            }
-            captureAndDetect();
-        });
 
         const OFFICE_LAT = {{ \App\Models\Setting::get('office_latitude', 0) }};
         const OFFICE_LNG = {{ \App\Models\Setting::get('office_longitude', 0) }};
@@ -479,85 +466,40 @@
             @endforeach
         ];
 
-        if (typeof faceapi !== 'undefined') {
-            updateStatus("Siap Memindai", "info", 0, true);
-        }
+        if (typeof faceapi !== 'undefined') loadModels();
 
-        async function ensureFaceSystemLoaded() {
-            if (isFaceSystemReady) return true;
-            if (isProcessing) return false;
-            isProcessing = true;
-
-            try {
-                updateStatus("Memuat model wajah...", "info", 0, true);
-
-                await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-                await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
-                await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
-
-                updateStatus("Menyiapkan data karyawan...", "info", 0, true);
-
-                labeledFaceDescriptors = await loadLabeledDescriptorsFromCacheOrCompute();
-                if (labeledFaceDescriptors.length > 0) {
+        function loadModels() {
+            Promise.all([
+                faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+                faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+                faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+            ]).then(async () => {
+                labeledFaceDescriptors = await loadLabeledImages();
+                if(labeledFaceDescriptors.length > 0) {
                     faceMatcher = new faceapi.FaceMatcher(labeledFaceDescriptors, MATCH_THRESHOLD);
                 }
                 isFaceSystemReady = true;
-                return true;
-            } catch (err) {
-                console.error(err);
-                updateStatus("Gagal memuat model", "danger", 0, true);
-                return false;
-            } finally {
-                isProcessing = false;
-            }
+            }).catch(err => console.error(err));
         }
 
-        function getEmployeesCacheKey() {
-            return 'pms_face_descriptors_v1_' + btoa(unescape(encodeURIComponent(JSON.stringify(employees))));
-        }
-
-        async function loadLabeledDescriptorsFromCacheOrCompute() {
-            const cacheKey = getEmployeesCacheKey();
-            try {
-                const cached = localStorage.getItem(cacheKey);
-                if (cached) {
-                    const parsed = JSON.parse(cached);
-                    return parsed.map(item => new faceapi.LabeledFaceDescriptors(
-                        item.label,
-                        item.descriptors.map(d => new Float32Array(d))
-                    ));
-                }
-            } catch (e) {}
-
-            const results = [];
-            for (let i = 0; i < employees.length; i++) {
-                const employee = employees[i];
-                updateStatus(`Memuat data karyawan ${i + 1}/${employees.length}...`, "info", 0, true);
-                const descriptions = [];
-                try {
-                    const img = await faceapi.fetchImage(employee.photo);
-                    const detections = await faceapi
-                        .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: MIN_FACE_SCORE }))
-                        .withFaceLandmarks()
-                        .withFaceDescriptor();
-                    if (detections) {
-                        descriptions.push(detections.descriptor);
-                        results.push(new faceapi.LabeledFaceDescriptors(employee.name, descriptions));
-                    }
-                } catch (e) {
-                    console.error(e);
-                }
-            }
-
-            try {
-                const toCache = results.map(ld => ({
-                    label: ld.label,
-                    descriptors: ld.descriptors.map(d => Array.from(d))
-                }));
-                localStorage.setItem(cacheKey, JSON.stringify(toCache));
-            } catch (e) {}
-
-            return results;
+        async function loadLabeledImages() {
+            return Promise.all(
+                employees.map(async (employee) => {
+                    const descriptions = [];
+                    try {
+                        const img = await faceapi.fetchImage(employee.photo);
+                        const detections = await faceapi
+                            .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: MIN_FACE_SCORE }))
+                            .withFaceLandmarks()
+                            .withFaceDescriptor();
+                        if(detections) {
+                            descriptions.push(detections.descriptor);
+                            return new faceapi.LabeledFaceDescriptors(employee.name, descriptions);
+                        }
+                    } catch(e) { console.error(e); }
+                    return null;
+                })
+            ).then(results => results.filter(r => r !== null));
         }
 
         function openScanner() {
@@ -598,100 +540,24 @@
             resetCamera();
         }
 
-        function handleTapToStartCamera() {
-            if (stream) return;
-            if (isStartingCamera) return;
-            startVideo();
-        }
-
         function startVideo() {
-            if (stream) return;
-            if (isStartingCamera) return;
-            isStartingCamera = true;
-
             updateStatus("Inisialisasi...", "warning");
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                if (cameraStartTimeoutHandle) clearTimeout(cameraStartTimeoutHandle);
-
-                updateStatus("Meminta izin kamera...", "warning", 0, true);
-
-                cameraStartTimeoutHandle = setTimeout(() => {
-                    if (!stream) updateStatus("Ketuk layar untuk mulai kamera", "warning", 0, true);
-                }, CAMERA_START_TIMEOUT_MS);
-
-                document.getElementById('scanInterface').addEventListener('click', handleTapToStartCamera, { passive: true });
-
-                const primaryConstraints = {
-                    audio: false,
-                    video: {
-                        facingMode: { ideal: "user" },
-                        width: { ideal: 640 },
-                        height: { ideal: 480 },
-                        frameRate: { ideal: 24, max: 30 }
-                    }
-                };
-
-                const fallbackConstraints = { audio: false, video: true };
-
-                navigator.mediaDevices.getUserMedia(primaryConstraints)
+                navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
                     .then(s => {
                         stream = s;
                         video.srcObject = stream;
-                        video.onloadedmetadata = () => {
-                            const playPromise = video.play();
-                            if (playPromise && typeof playPromise.catch === 'function') {
-                                playPromise.catch(() => {});
-                            }
-                        };
-
-                        video.onplaying = async () => {
-                            if (cameraStartTimeoutHandle) clearTimeout(cameraStartTimeoutHandle);
-                            updateStatus("Siap Memindai", "info");
-                            document.getElementById('scanInterface').removeEventListener('click', handleTapToStartCamera);
-                            captureBtn.innerHTML = '<i class="fas fa-camera me-2"></i> AMBIL FOTO';
-                            captureBtn.disabled = true;
-                            isStartingCamera = false;
-                            await ensureFaceSystemLoaded();
-                            startScanning();
-                        };
+                        video.play();
+                        updateStatus("Siap Memindai", "info");
+                        video.onplay = () => startScanning();
                     })
-                    .catch(() => {
-                        navigator.mediaDevices.getUserMedia(fallbackConstraints)
-                            .then(s => {
-                                stream = s;
-                                video.srcObject = stream;
-                                video.onloadedmetadata = () => {
-                                    const playPromise = video.play();
-                                    if (playPromise && typeof playPromise.catch === 'function') {
-                                        playPromise.catch(() => {});
-                                    }
-                                };
-                                video.onplaying = async () => {
-                                    if (cameraStartTimeoutHandle) clearTimeout(cameraStartTimeoutHandle);
-                                    updateStatus("Siap Memindai", "info");
-                                    document.getElementById('scanInterface').removeEventListener('click', handleTapToStartCamera);
-                                    captureBtn.innerHTML = '<i class="fas fa-camera me-2"></i> AMBIL FOTO';
-                                    captureBtn.disabled = true;
-                                    isStartingCamera = false;
-                                    await ensureFaceSystemLoaded();
-                                    startScanning();
-                                };
-                            })
-                            .catch(() => {
-                                isStartingCamera = false;
-                                updateStatus("Kamera Error", "danger", 0, true);
-                            });
-                    });
+                    .catch(err => updateStatus("Kamera Error", "danger"));
             }
         }
 
         function stopVideo() {
             if (stream) stream.getTracks().forEach(track => track.stop());
             video.srcObject = null;
-            stream = null;
-            document.getElementById('scanInterface').removeEventListener('click', handleTapToStartCamera);
-            captureBtn.disabled = false;
-            captureBtn.innerHTML = '<i class="fas fa-camera me-2"></i> MULAI KAMERA';
         }
 
         let statusHoldUntil = 0;
@@ -836,15 +702,10 @@
             stopScanning();
             
             const canvas = document.createElement('canvas');
-            const maxWidth = 640;
-            const srcWidth = video.videoWidth;
-            const srcHeight = video.videoHeight;
-            const ratio = srcWidth ? Math.min(1, maxWidth / srcWidth) : 1;
-            canvas.width = Math.round(srcWidth * ratio);
-            canvas.height = Math.round(srcHeight * ratio);
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            const dataUrl = canvas.toDataURL('image/jpeg');
 
             video.style.display = 'none';
             capturedImage.src = dataUrl;
