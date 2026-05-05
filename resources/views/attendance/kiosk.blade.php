@@ -1264,14 +1264,22 @@
             if (!isLivenessVerified) {
                 updateStatus("", "info");
                 setVideoState('recognized');
-                setCaptureReady(false);
+                setCaptureReady(true);
             }
 
             updateLiveness(detections);
         }
 
         async function captureAndDetect() {
-            if (!isLivenessVerified || !userIdInput.value) return;
+            if (!userIdInput.value) return;
+            if (!isLivenessVerified) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Verifikasi dulu',
+                    text: getCurrentInstructionText(),
+                });
+                return;
+            }
 
             isProcessing = true;
             stopScanning();
