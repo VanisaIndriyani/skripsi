@@ -724,6 +724,11 @@
 
         if (typeof faceapi !== 'undefined') {
             ensureModelsLoaded();
+            if (typeof requestIdleCallback === 'function') {
+                requestIdleCallback(() => ensureMatcherReady(), { timeout: 1200 });
+            } else {
+                setTimeout(() => ensureMatcherReady(), 250);
+            }
         }
 
         function hashString(input) {
@@ -777,15 +782,11 @@
                 }
             } catch (e) {}
 
-            const results = [];
-            for (let i = 0; i < employees.length; i++) {
-                const employee = employees[i];
-                updateStatus(`Menyiapkan data karyawan ${i + 1}/${employees.length}...`, "info", 0, true);
-                const descriptions = [];
+            async function computeEmployeeDescriptor(employee) {
                 try {
                     const img = await faceapi.fetchImage(employee.photo);
                     const canvas = document.createElement('canvas');
-                    const maxSide = 240;
+                    const maxSide = 192;
                     const ratio = img.width && img.height ? Math.min(1, maxSide / Math.max(img.width, img.height)) : 1;
                     canvas.width = Math.max(1, Math.round((img.width || maxSide) * ratio));
                     canvas.height = Math.max(1, Math.round((img.height || maxSide) * ratio));
@@ -798,13 +799,34 @@
                         .withFaceDescriptor();
 
                     if (detections && detections.descriptor) {
-                        descriptions.push(detections.descriptor);
-                        results.push(new faceapi.LabeledFaceDescriptors(employee.name, descriptions));
+                        return new faceapi.LabeledFaceDescriptors(employee.name, [detections.descriptor]);
                     }
-                } catch (e) {
-                    console.error(e);
-                }
+                } catch (e) {}
+                return null;
             }
+
+            const results = [];
+            const total = employees.length;
+            let nextIndex = 0;
+            let doneCount = 0;
+            const concurrency = Math.min(4, Math.max(1, total));
+
+            const workers = Array.from({ length: concurrency }, async () => {
+                while (nextIndex < total) {
+                    const i = nextIndex;
+                    nextIndex += 1;
+
+                    if (detectedNameInput) {
+                        detectedNameInput.value = `Menyiapkan AI ${doneCount + 1}/${total}...`;
+                    }
+
+                    const lfd = await computeEmployeeDescriptor(employees[i]);
+                    doneCount += 1;
+                    if (lfd) results.push(lfd);
+                }
+            });
+
+            await Promise.all(workers);
 
             try {
                 const toCache = results.map(ld => ({
@@ -814,6 +836,7 @@
                 localStorage.setItem(cacheKey, JSON.stringify(toCache));
             } catch (e) {}
 
+            if (detectedNameInput) detectedNameInput.value = "";
             return results;
         }
 
