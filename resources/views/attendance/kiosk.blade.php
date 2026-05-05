@@ -168,7 +168,7 @@
         
         .scan-container {
             width: 100%;
-            max-width: 350px; /* Adjusted from 480px to 350px */
+            max-width: 320px;
             display: flex;
             flex-direction: column;
             gap: 20px;
@@ -191,9 +191,9 @@
             box-shadow: 0 0 55px rgba(212, 175, 55, 0.35);
         }
 
-        .video-container.is-locked {
-            border-color: rgba(212, 175, 55, 1);
-            box-shadow: 0 0 70px rgba(212, 175, 55, 0.55);
+        .video-container.is-recognized {
+            border-color: rgba(34, 197, 94, 0.75);
+            box-shadow: 0 0 70px rgba(34, 197, 94, 0.22);
         }
 
         .video-container.is-verified {
@@ -222,8 +222,14 @@
             backdrop-filter: blur(0px);
         }
 
+        .video-container.is-recognized .face-guide::before,
         .video-container.is-verified .face-guide::before {
             border-color: rgba(34, 197, 94, 0.65);
+        }
+
+        .scan-frame,
+        .scan-line {
+            display: none;
         }
 
         .success-overlay {
@@ -416,10 +422,10 @@
                 margin: auto;
                 min-height: 100vh;
                 justify-content: center;
-                max-width: 320px;
+                max-width: 300px;
                 gap: 14px;
             }
-            .video-container { border-radius: 28px; border-width: 3px; }
+            .video-container { border-radius: 24px; border-width: 2px; }
             .scan-info-card { padding: 14px; border-radius: 20px; }
             .scan-overlay {
                 overflow-y: auto; /* Allow scrolling on small screens */
@@ -901,7 +907,7 @@
         function setVideoState(state) {
             if (!videoContainer) return;
             videoContainer.classList.toggle('is-detecting', state === 'detecting');
-            videoContainer.classList.toggle('is-locked', state === 'locked');
+            videoContainer.classList.toggle('is-recognized', state === 'recognized' || state === 'locked');
             videoContainer.classList.toggle('is-verified', state === 'verified');
         }
 
@@ -1000,7 +1006,7 @@
 
             const step = livenessSequence[livenessStepIndex] || 'blink';
             updateStatus(getCurrentInstructionText(), "warning", INSTRUCTION_HOLD_MS);
-            setVideoState('locked');
+            setVideoState('recognized');
 
             if (step === 'blink') {
                 const avgEAR = getAvgEAR(landmarks);
@@ -1037,7 +1043,7 @@
             if (!livenessChallengeStartedAt) livenessChallengeStartedAt = now;
             if (now - livenessChallengeStartedAt < MIN_LIVENESS_DURATION_MS) {
                 updateStatus("Memverifikasi...", "info", INSTRUCTION_HOLD_MS);
-                setVideoState('locked');
+                setVideoState('recognized');
                 return;
             }
 
@@ -1210,7 +1216,7 @@
 
             if (!isLivenessVerified) {
                 updateStatus("", "info");
-                setVideoState('locked');
+                setVideoState('recognized');
                 setCaptureReady(true);
             }
 
