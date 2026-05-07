@@ -292,8 +292,14 @@ function initKiosk() {
 
     function ensureModelsLoaded() {
         if (modelsPromise) return modelsPromise;
-        modelsPromise = ensureScriptLoaded(FACE_API_CDN).then(() => {
+        modelsPromise = ensureScriptLoaded(FACE_API_CDN).then(async () => {
             if (!window.faceapi) throw new Error('faceapi missing');
+            try {
+                if (window.faceapi.tf && typeof window.faceapi.tf.setBackend === 'function') {
+                    await window.faceapi.tf.setBackend('webgl');
+                    if (typeof window.faceapi.tf.ready === 'function') await window.faceapi.tf.ready();
+                }
+            } catch (e) {}
             return Promise.all([
                 window.faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
                 window.faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
@@ -353,6 +359,8 @@ function initKiosk() {
         const total = employees.length;
         let nextIndex = 0;
         let doneCount = 0;
+        let lastMatcherUpdateAt = 0;
+        let lastMatcherCount = 0;
         const cpu = Number(navigator.hardwareConcurrency || 4);
         const concurrency = Math.min(Math.max(2, cpu - 1), Math.min(6, Math.max(1, total)));
 
@@ -369,7 +377,21 @@ function initKiosk() {
 
                 const lfd = await computeEmployeeDescriptor(employees[i], photoDetectorOptions);
                 doneCount += 1;
-                if (lfd) results.push(lfd);
+                if (lfd) {
+                    results.push(lfd);
+                    const now2 = Date.now();
+                    const shouldUpdate =
+                        !faceMatcher ||
+                        (results.length - lastMatcherCount >= 8) ||
+                        (now2 - lastMatcherUpdateAt >= 650);
+                    if (shouldUpdate) {
+                        try {
+                            faceMatcher = new window.faceapi.FaceMatcher(results.slice(), MATCH_THRESHOLD);
+                            lastMatcherUpdateAt = now2;
+                            lastMatcherCount = results.length;
+                        } catch (e) {}
+                    }
+                }
             }
         });
 
@@ -383,7 +405,14 @@ function initKiosk() {
             localStorage.setItem(cacheKey, JSON.stringify(toCache));
         } catch (e) {}
 
-        updateStatus("Siap memindai", "info", 500, true);
+        if (results.length > 0) {
+            try {
+                faceMatcher = new window.faceapi.FaceMatcher(results.slice(), MATCH_THRESHOLD);
+            } catch (e) {}
+            updateStatus("Siap memindai", "info", 500, true);
+        } else {
+            updateStatus("Data wajah karyawan belum siap", "warning", 1400, true);
+        }
         return results;
     }
 
@@ -900,7 +929,7 @@ function initKiosk() {
         if (!faceMatcher) {
             setCaptureReady(false);
             setVideoState('detecting');
-            updateStatus("Wajah terdeteksi", "info", 450);
+            updateStatus("Menyiapkan data karyawan...", "info", 0, true);
             ensureMatcherReady();
             if (manualPickBtn) manualPickBtn.classList.remove('d-none');
             return;
