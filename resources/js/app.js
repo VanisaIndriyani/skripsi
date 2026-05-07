@@ -107,9 +107,9 @@ function initKiosk() {
     const EYE_MOVE_ASYM_THRESHOLD = 0.03;
     const EYE_MOVE_HIGH_FRAMES = 2;
     const EYE_MOVE_NEUTRAL_FRAMES = 2;
-    const EYE_MOVE_REQUIRED_EVENTS = 0;
+    const EYE_MOVE_REQUIRED_EVENTS = 999;
     const GAZE_YAW_MAX = 0.20;
-    const GAZE_REQUIRED_FRAMES = 0;
+    const GAZE_REQUIRED_FRAMES = 999;
     const YAW_TURN_THRESHOLD = 0.18;
     const HEAD_STABLE_FRAMES_REQUIRED = 2;
     const REQUIRE_MOUTH_STEP = false;
@@ -745,6 +745,10 @@ function initKiosk() {
 
     function verifyLiveness() {
         if (!candidateEmployee) return;
+        if (REQUIRED_BLINKS > 0 && blinkCount < REQUIRED_BLINKS) {
+            updateStatus("Kedip 1x untuk verifikasi", "warning", 900, true);
+            return;
+        }
         isLivenessVerified = true;
         if (detectedNameInput) detectedNameInput.value = recognizedEmployeeName || candidateEmployee.name;
         if (userIdInput) userIdInput.value = recognizedEmployeeId || candidateEmployee.id;
@@ -771,11 +775,8 @@ function initKiosk() {
         setVideoState('detecting');
 
         if (step === 'blink') {
-            if (!isLivenessVerified && blinkCount < requiredBlinks) {
-                showInstruction('Kedip 1x untuk verifikasi');
-            } else {
-                hideInstruction();
-            }
+            if (!isLivenessVerified && blinkCount < requiredBlinks) showInstruction('Kedip 1x untuk verifikasi');
+            else hideInstruction();
             const ears = getEyeEARs(landmarks);
             const avgEAR = ears.avgEAR;
             const stable = isFaceStable(detections.detection?.box);
@@ -783,9 +784,7 @@ function initKiosk() {
             updateEarBaseline(avgEAR, stable, yaw);
             const thresholds = getBlinkThresholds();
             updateBlinkState(avgEAR, stable, yaw, now, thresholds.low, thresholds.high);
-            updateEyeMoveState(ears.leftEAR, ears.rightEAR, stable, yaw);
-            updateGazeState(avgEAR, stable, yaw, thresholds.high);
-            if (blinkCount >= requiredBlinks || eyeMoveEventCount >= EYE_MOVE_REQUIRED_EVENTS || gazeFrames >= GAZE_REQUIRED_FRAMES) {
+            if (blinkCount >= requiredBlinks) {
                 livenessStepIndex += 1;
                 headStableFrames = 0;
                 mouthState = 'closed';
