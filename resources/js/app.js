@@ -62,7 +62,8 @@ function initKiosk() {
     const successOverlay = document.getElementById('successOverlay');
     const scanInterface = document.getElementById('scanInterface');
     const instructionToast = document.getElementById('instructionToast');
-    const instructionText = document.getElementById('instructionText');
+    const challengePopup = document.getElementById('challengePopup');
+    const challengeText = document.getElementById('challengeText');
     const statusSpinner = document.getElementById('statusSpinner');
     const manualPickBtn = document.getElementById('manualPickBtn');
     const manualModal = document.getElementById('manualModal');
@@ -93,7 +94,7 @@ function initKiosk() {
     const MIN_DETECTION_SCORE = 0.35;
     const LIVENESS_TIMEOUT_MS = 6500;
     const MIN_LIVENESS_DURATION_MS = 140;
-    const REQUIRED_BLINKS = 1;
+    const REQUIRED_BLINKS = 0;
     const BLINK_LOW_THRESHOLD = 0.20;
     const BLINK_HIGH_THRESHOLD = 0.24;
     const BLINK_MIN_CLOSED_FRAMES = 1;
@@ -172,6 +173,7 @@ function initKiosk() {
     let recognizedEmployeeName = "";
     let lastFaceBox = null;
     let lastInstructionShown = "";
+    let lastChallengeShown = "";
     let manualSelectedEmployee = null;
     let lastPrepUiAt = 0;
 
@@ -210,19 +212,19 @@ function initKiosk() {
     }
 
     function showInstruction(text) {
-        if (!instructionToast || !instructionText) return;
         const t = String(text || '').trim();
         if (!t) return hideInstruction();
-        if (t === lastInstructionShown && instructionToast.classList.contains('is-visible')) return;
-        instructionText.textContent = t;
-        instructionToast.classList.add('is-visible');
-        lastInstructionShown = t;
+        if (!challengePopup || !challengeText) return;
+        if (t === lastChallengeShown && challengePopup.classList.contains('is-visible')) return;
+        challengeText.textContent = t;
+        challengePopup.classList.add('is-visible');
+        lastChallengeShown = t;
     }
 
     function hideInstruction() {
-        if (!instructionToast) return;
-        instructionToast.classList.remove('is-visible');
+        if (challengePopup) challengePopup.classList.remove('is-visible');
         lastInstructionShown = "";
+        lastChallengeShown = "";
     }
 
     function setCaptureReady(ready) {
@@ -466,12 +468,12 @@ function initKiosk() {
             if (userIdInput) userIdInput.value = "";
             if (submitBtn) submitBtn.disabled = true;
             initLivenessChallenge();
-            hideInstruction();
         }
     }
 
     function initLivenessChallenge() {
-        livenessSequence = ['blink'];
+        const dir = Math.random() < 0.5 ? 'left' : 'right';
+        livenessSequence = [dir];
         livenessStepIndex = 0;
         headStableFrames = 0;
         requiredBlinks = REQUIRED_BLINKS;
@@ -494,6 +496,7 @@ function initKiosk() {
         livenessStartedAt = null;
         livenessChallengeStartedAt = Date.now();
         if (successOverlay) successOverlay.classList.remove('is-visible');
+        showInstruction(dir === 'left' ? 'Putar kepala ke kiri untuk verifikasi' : 'Putar kepala ke kanan untuk verifikasi');
     }
 
     function averagePoints(points) {
@@ -745,10 +748,6 @@ function initKiosk() {
 
     function verifyLiveness() {
         if (!candidateEmployee) return;
-        if (REQUIRED_BLINKS > 0 && blinkCount < REQUIRED_BLINKS) {
-            updateStatus("Kedip 1x untuk verifikasi", "warning", 900, true);
-            return;
-        }
         isLivenessVerified = true;
         if (detectedNameInput) detectedNameInput.value = recognizedEmployeeName || candidateEmployee.name;
         if (userIdInput) userIdInput.value = recognizedEmployeeId || candidateEmployee.id;
@@ -771,63 +770,23 @@ function initKiosk() {
             livenessStartedAt = now;
         }
         if (!livenessSequence.length) initLivenessChallenge();
-        const step = livenessSequence[livenessStepIndex] || 'blink';
+        const step = livenessSequence[livenessStepIndex] || 'left';
         setVideoState('detecting');
-
-        if (step === 'blink') {
-            if (!isLivenessVerified && blinkCount < requiredBlinks) showInstruction('Kedip 1x untuk verifikasi');
-            else hideInstruction();
-            const ears = getEyeEARs(landmarks);
-            const avgEAR = ears.avgEAR;
-            const stable = isFaceStable(detections.detection?.box) || isFaceCentered(detections);
-            const yaw = getYaw(landmarks);
-            updateEarBaseline(avgEAR, stable, yaw);
-            const thresholds = getBlinkThresholds();
-            updateBlinkState(avgEAR, stable, yaw, now, thresholds.low, thresholds.high);
-            if (blinkCount >= requiredBlinks) {
-                livenessStepIndex += 1;
-                headStableFrames = 0;
-                mouthState = 'closed';
-                mouthOpenFrames = 0;
-                mouthClosedFrames = 0;
-            }
-        } else if (step === 'mouth') {
-            hideInstruction();
-            const stable = isFaceStable(detections.detection?.box) || isFaceCentered(detections);
-            const yaw = getYaw(landmarks);
-            const mar = getMAR(landmarks);
-            const done = updateMouthState(mar, stable, yaw);
-            if (done) {
-                livenessStepIndex += 1;
-                headStableFrames = 0;
-                blinkCount = 0;
-                blinkState = 'open';
-                earClosedFrames = 0;
-                earOpenFrames = 0;
-            }
-        } else {
-            hideInstruction();
-            const yaw = getYaw(landmarks);
-            const ok =
-                (step === 'left' && yaw <= -YAW_TURN_THRESHOLD) ||
-                (step === 'right' && yaw >= YAW_TURN_THRESHOLD);
-            const stable = isFaceStable(detections.detection?.box) || isFaceCentered(detections);
-            if (ok && stable) headStableFrames += 1;
-            else headStableFrames = 0;
-            if (headStableFrames >= HEAD_STABLE_FRAMES_REQUIRED) {
-                livenessStepIndex += 1;
-                headStableFrames = 0;
-                blinkCount = 0;
-                blinkState = 'open';
-                earClosedFrames = 0;
-                earOpenFrames = 0;
-                mouthState = 'closed';
-                mouthOpenFrames = 0;
-                mouthClosedFrames = 0;
-            }
+        showInstruction(step === 'left' ? 'Putar kepala ke kiri untuk verifikasi' : 'Putar kepala ke kanan untuk verifikasi');
+        const yaw = getYaw(landmarks);
+        const ok =
+            (step === 'left' && yaw <= -YAW_TURN_THRESHOLD) ||
+            (step === 'right' && yaw >= YAW_TURN_THRESHOLD);
+        const stable = isFaceStable(detections.detection?.box) || isFaceCentered(detections);
+        if (ok && stable) headStableFrames += 1;
+        else headStableFrames = 0;
+        if (headStableFrames >= HEAD_STABLE_FRAMES_REQUIRED) {
+            livenessStepIndex += 1;
+            headStableFrames = 0;
         }
 
         if (livenessStepIndex < livenessSequence.length) return;
+        showInstruction('Memverifikasi...');
         if (!livenessChallengeStartedAt) livenessChallengeStartedAt = now;
         if (now - livenessChallengeStartedAt < MIN_LIVENESS_DURATION_MS) {
             setVideoState('detecting');

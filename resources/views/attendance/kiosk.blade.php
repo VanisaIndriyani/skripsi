@@ -79,6 +79,14 @@
                     <div class="loader-orb"></div>
                     <div class="loader-text">Menyiapkan kamera</div>
                 </div>
+                <div class="kiosk-challenge" id="challengePopup" aria-live="polite">
+                    <div class="kiosk-challenge-card">
+                        <div class="kiosk-challenge-icon">
+                            <i class="fas fa-user-shield"></i>
+                        </div>
+                        <div class="kiosk-challenge-text" id="challengeText">Lihat kiri untuk verifikasi</div>
+                    </div>
+                </div>
                 <video id="video" autoplay muted playsinline></video>
                 <img id="captured_image" src="" alt="Captured Photo" style="display:none;">
                 <div class="success-overlay" id="successOverlay">
@@ -95,10 +103,7 @@
                     Tidak terdeteksi? Pilih nama
                 </button>
 
-                <div id="instructionToast" class="mini-instruction">
-                    <i class="fas fa-eye"></i>
-                    <span id="instructionText">Posisikan wajah di oval</span>
-                </div>
+                <div id="instructionToast" class="mini-instruction d-none"></div>
 
                 <form id="attendanceForm" action="{{ route('attendance.storePublic') }}" method="POST">
                     @csrf

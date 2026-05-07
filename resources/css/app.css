@@ -422,6 +422,52 @@
     pointer-events: auto;
 }
 
+.kiosk-page .kiosk-challenge {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    z-index: 7;
+    display: none;
+}
+
+.kiosk-page .kiosk-challenge.is-visible {
+    display: block;
+}
+
+.kiosk-page .kiosk-challenge-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 16px;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(212, 175, 55, 0.18);
+    backdrop-filter: blur(14px);
+    box-shadow: 0 14px 38px rgba(0, 0, 0, 0.45);
+}
+
+.kiosk-page .kiosk-challenge-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(212, 175, 55, 0.10);
+    border: 1px solid rgba(212, 175, 55, 0.22);
+    color: rgba(241, 210, 122, 0.98);
+    flex: 0 0 auto;
+}
+
+.kiosk-page .kiosk-challenge-text {
+    font-weight: 800;
+    letter-spacing: 0.1px;
+    font-size: 0.9rem;
+    line-height: 1.15;
+    color: rgba(255, 255, 255, 0.92);
+}
+
 .kiosk-page .camera-loading .loader-orb {
     width: 54px;
     height: 54px;
@@ -695,6 +741,7 @@
         gap: 14px;
     }
     .kiosk-page .video-container { border-radius: 24px; border-width: 2px; }
+    .kiosk-page .kiosk-challenge-text { font-size: 0.82rem; }
     .kiosk-page .scan-info-card { padding: 14px; border-radius: 20px; }
     .kiosk-page .scan-overlay {
         overflow-y: auto;
