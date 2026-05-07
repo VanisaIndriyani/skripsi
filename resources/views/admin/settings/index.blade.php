@@ -31,6 +31,22 @@
                         @enderror
                     </div>
 
+                    <div class="mb-3">
+                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                            <label class="form-label fw-bold mb-0">Pilih Lokasi di Peta</label>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-3" id="useMyLocationBtn">
+                                    <i class="fas fa-location-crosshairs me-1"></i> Lokasi Saya
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-3" id="centerMapBtn">
+                                    <i class="fas fa-crosshairs me-1"></i> Center
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-text">Klik peta untuk menandai lokasi kantor. Marker bisa digeser (drag) untuk presisi.</div>
+                        <div id="officeMap" class="office-map mt-2"></div>
+                    </div>
+
                     <!-- New Location Display Section -->
                     <div id="location_preview_container" class="mb-4 d-none">
                         <div class="alert alert-light border-gold text-dark p-3 rounded shadow-sm">
@@ -87,74 +103,171 @@
 @endsection
 
 @section('styles')
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <style>
     .border-gold { border: 1px solid #D4AF37 !important; }
     .bg-gold-light { background-color: rgba(212, 175, 55, 0.1); }
     .text-gold { color: #D4AF37; }
+    .office-map {
+        width: 100%;
+        height: 320px;
+        border-radius: 14px;
+        overflow: hidden;
+        border: 1px solid rgba(0,0,0,0.1);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+    }
+    @media (max-width: 576px) {
+        .office-map { height: 280px; }
+    }
 </style>
 @endsection
 
 @section('scripts')
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
-    const latInput = document.getElementById('office_latitude');
-    const lngInput = document.getElementById('office_longitude');
-    const previewContainer = document.getElementById('location_preview_container');
-    const locationName = document.getElementById('location_name');
-    const locationDetail = document.getElementById('location_detail');
+    document.addEventListener('DOMContentLoaded', () => {
+        const latInput = document.getElementById('office_latitude');
+        const lngInput = document.getElementById('office_longitude');
+        const radiusInput = document.getElementById('office_radius');
+        const previewContainer = document.getElementById('location_preview_container');
+        const locationName = document.getElementById('location_name');
+        const locationDetail = document.getElementById('location_detail');
+        const useMyLocationBtn = document.getElementById('useMyLocationBtn');
+        const centerMapBtn = document.getElementById('centerMapBtn');
 
-    let timeout = null;
+        let timeout = null;
 
-    function fetchLocation() {
-        const lat = latInput.value.trim();
-        const lng = lngInput.value.trim();
+        function parseNum(val) {
+            const n = Number(String(val || '').trim());
+            return Number.isFinite(n) ? n : null;
+        }
 
-        if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+        function getLatLngFromInputs() {
+            const lat = parseNum(latInput.value);
+            const lng = parseNum(lngInput.value);
+            if (lat === null || lng === null) return null;
+            return { lat, lng };
+        }
+
+        function setInputsFromLatLng(lat, lng) {
+            latInput.value = Number(lat).toFixed(6);
+            lngInput.value = Number(lng).toFixed(6);
+            fetchLocation();
+        }
+
+        function fetchLocation() {
+            const ll = getLatLngFromInputs();
+            if (!ll) {
+                previewContainer.classList.add('d-none');
+                return;
+            }
+
             previewContainer.classList.remove('d-none');
             locationName.innerText = "Memuat lokasi...";
             locationDetail.innerText = "Mencari detail alamat...";
 
-            // Debounce the API call
             clearTimeout(timeout);
             timeout = setTimeout(() => {
-                const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`;
-
+                const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${ll.lat}&lon=${ll.lng}`;
                 fetch(url, {
-                    headers: {
-                        'User-Agent': 'PMS-Attendance-System'
-                    }
+                    headers: { 'User-Agent': 'PMS-Attendance-System' }
                 })
                 .then(response => response.json())
                 .then(data => {
                     if (data && data.address) {
                         const addr = data.address;
-                        
-                        // Extract Village (Desa) and District (Kecamatan)
                         const village = addr.village || addr.suburb || addr.neighbourhood || addr.hamlet || "Desa tidak ditemukan";
                         const district = addr.city_district || addr.county || addr.city || "Kecamatan tidak ditemukan";
                         const province = addr.state || "";
-
-                        locationName.innerText = `${village.toUpperCase()}`;
+                        locationName.innerText = `${String(village).toUpperCase()}`;
                         locationDetail.innerText = `Kecamatan: ${district}, ${province}`;
                     } else {
                         locationName.innerText = "Lokasi tidak ditemukan";
                         locationDetail.innerText = "Pastikan koordinat benar";
                     }
                 })
-                .catch(error => {
-                    console.error('Error:', error);
+                .catch(() => {
                     locationName.innerText = "Gagal memuat lokasi";
                     locationDetail.innerText = "Koneksi internet bermasalah";
                 });
-            }, 1000); // 1 second debounce
-        } else {
-            previewContainer.classList.add('d-none');
+            }, 900);
         }
-    }
 
-    latInput.addEventListener('input', fetchLocation);
-    lngInput.addEventListener('input', fetchLocation);
+        const initial = getLatLngFromInputs() || { lat: -6.175392, lng: 106.827153 };
+        const map = L.map('officeMap', { zoomControl: true }).setView([initial.lat, initial.lng], 16);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap'
+        }).addTo(map);
 
-    // Initial check on page load
-    window.onload = fetchLocation;
+        const marker = L.marker([initial.lat, initial.lng], { draggable: true }).addTo(map);
+
+        let radiusCircle = null;
+        function updateRadiusCircle() {
+            const ll = getLatLngFromInputs() || initial;
+            const r = Math.max(10, parseNum(radiusInput.value) || 100);
+            if (radiusCircle) radiusCircle.remove();
+            radiusCircle = L.circle([ll.lat, ll.lng], {
+                radius: r,
+                color: '#D4AF37',
+                weight: 2,
+                fillColor: '#D4AF37',
+                fillOpacity: 0.10
+            }).addTo(map);
+        }
+
+        function moveMarker(lat, lng, shouldCenter = false) {
+            marker.setLatLng([lat, lng]);
+            if (radiusCircle) radiusCircle.setLatLng([lat, lng]);
+            if (shouldCenter) map.setView([lat, lng], Math.max(map.getZoom(), 16), { animate: true });
+        }
+
+        map.on('click', (e) => {
+            const { lat, lng } = e.latlng;
+            moveMarker(lat, lng, false);
+            setInputsFromLatLng(lat, lng);
+            updateRadiusCircle();
+        });
+
+        marker.on('dragend', () => {
+            const ll = marker.getLatLng();
+            setInputsFromLatLng(ll.lat, ll.lng);
+            updateRadiusCircle();
+        });
+
+        function syncMapToInputs(center = false) {
+            const ll = getLatLngFromInputs();
+            if (!ll) return;
+            moveMarker(ll.lat, ll.lng, center);
+            updateRadiusCircle();
+        }
+
+        latInput.addEventListener('input', () => syncMapToInputs(false));
+        lngInput.addEventListener('input', () => syncMapToInputs(false));
+        radiusInput.addEventListener('input', updateRadiusCircle);
+
+        if (centerMapBtn) {
+            centerMapBtn.addEventListener('click', () => syncMapToInputs(true));
+        }
+
+        if (useMyLocationBtn) {
+            useMyLocationBtn.addEventListener('click', () => {
+                if (!navigator.geolocation) return;
+                useMyLocationBtn.disabled = true;
+                navigator.geolocation.getCurrentPosition((pos) => {
+                    const lat = pos.coords.latitude;
+                    const lng = pos.coords.longitude;
+                    setInputsFromLatLng(lat, lng);
+                    moveMarker(lat, lng, true);
+                    updateRadiusCircle();
+                }, () => {
+                }, { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 });
+                setTimeout(() => { useMyLocationBtn.disabled = false; }, 1200);
+            });
+        }
+
+        fetchLocation();
+        updateRadiusCircle();
+    });
 </script>
 @endsection
