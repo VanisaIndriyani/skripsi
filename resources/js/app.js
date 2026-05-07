@@ -93,7 +93,7 @@ function initKiosk() {
     const MIN_DETECTION_SCORE = 0.35;
     const LIVENESS_TIMEOUT_MS = 6500;
     const MIN_LIVENESS_DURATION_MS = 140;
-    const REQUIRED_BLINKS = 0;
+    const REQUIRED_BLINKS = 1;
     const BLINK_LOW_THRESHOLD = 0.20;
     const BLINK_HIGH_THRESHOLD = 0.24;
     const BLINK_MIN_CLOSED_FRAMES = 1;
@@ -771,8 +771,8 @@ function initKiosk() {
         setVideoState('detecting');
 
         if (step === 'blink') {
-            if (!isLivenessVerified && blinkCount < requiredBlinks && eyeMoveEventCount < EYE_MOVE_REQUIRED_EVENTS) {
-                showInstruction('Posisikan wajah di oval');
+            if (!isLivenessVerified && blinkCount < requiredBlinks) {
+                showInstruction('Kedip 1x untuk verifikasi');
             } else {
                 hideInstruction();
             }
