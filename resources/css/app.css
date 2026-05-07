@@ -33,6 +33,8 @@
         radial-gradient(circle at top right, #171717, #090909);
     font-family: 'Outfit', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
     color: #fff;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -517,6 +519,7 @@
     color: rgba(255, 255, 255, 0.92);
     font-weight: 700;
     font-size: 0.9rem;
+    line-height: 1.1;
     letter-spacing: 0.2px;
     text-align: center;
 }
@@ -525,6 +528,12 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
+}
+
+.kiosk-page .mini-instruction i {
+    width: 18px;
+    text-align: center;
+    font-size: 0.95rem;
 }
 
 .kiosk-page .btn-gold {
@@ -693,4 +702,12 @@
         padding: 22px 12px;
     }
     .kiosk-page .close-btn { top: 18px; right: 18px; width: 44px; height: 44px; }
+    .kiosk-page .mini-instruction {
+        font-size: 0.82rem;
+        padding: 7px 10px;
+        margin: 6px auto 12px;
+    }
+    .kiosk-page .mini-instruction i {
+        font-size: 0.9rem;
+    }
 }

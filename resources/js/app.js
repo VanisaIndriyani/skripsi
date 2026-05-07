@@ -81,7 +81,7 @@ function initKiosk() {
     const OFFICE_LNG = Number(cfg.officeLng || 0);
     const MAX_RADIUS = Number(cfg.officeRadius || 100);
 
-    const DETECTION_INTERVAL_MS = 110;
+    const DETECTION_INTERVAL_MS = 90;
     const VIDEO_INPUT_SIZE = (window.innerWidth && window.innerWidth >= 520) ? 128 : 96;
     const VIDEO_SCORE_THRESHOLD = 0.42;
     const PHOTO_INPUT_SIZE = 128;
@@ -100,8 +100,8 @@ function initKiosk() {
     const BLINK_MIN_OPEN_FRAMES = 1;
     const BLINK_MIN_INTERVAL_MS = 150;
     const BLINK_MAX_CLOSED_FRAMES = 28;
-    const EAR_BASELINE_MIN_SAMPLES = 4;
-    const EAR_BASELINE_MAX_SAMPLES = 12;
+    const EAR_BASELINE_MIN_SAMPLES = 2;
+    const EAR_BASELINE_MAX_SAMPLES = 8;
     const EAR_OPEN_MIN = 0.14;
     const EAR_OPEN_MAX = 0.40;
     const EYE_MOVE_ASYM_THRESHOLD = 0.03;
@@ -109,7 +109,7 @@ function initKiosk() {
     const EYE_MOVE_NEUTRAL_FRAMES = 2;
     const EYE_MOVE_REQUIRED_EVENTS = 999;
     const GAZE_YAW_MAX = 0.20;
-    const GAZE_REQUIRED_FRAMES = 999;
+    const GAZE_REQUIRED_FRAMES = 0;
     const YAW_TURN_THRESHOLD = 0.18;
     const HEAD_STABLE_FRAMES_REQUIRED = 2;
     const REQUIRE_MOUTH_STEP = false;
@@ -118,8 +118,8 @@ function initKiosk() {
     const MOUTH_CLOSE_THRESHOLD = 0.30;
     const MOUTH_MIN_OPEN_FRAMES = 2;
     const MOUTH_MIN_CLOSED_FRAMES = 2;
-    const FACE_STABLE_CENTER_NORM_DELTA = 0.09;
-    const FACE_STABLE_SIZE_DELTA = 0.12;
+    const FACE_STABLE_CENTER_NORM_DELTA = 0.14;
+    const FACE_STABLE_SIZE_DELTA = 0.18;
     const FACE_MISSING_RESET_FRAMES = 8;
     const UNKNOWN_RESET_FRAMES = 8;
     const INSTRUCTION_HOLD_MS = 900;
@@ -605,8 +605,8 @@ function initKiosk() {
 
     function getBlinkThresholds() {
         if (earBaselineSamples >= EAR_BASELINE_MIN_SAMPLES && earBaseline) {
-            const low = Math.max(0.12, Math.min(0.28, earBaseline * 0.72));
-            const high = Math.max(low + 0.02, Math.min(0.34, earBaseline * 0.88));
+            const low = Math.max(0.13, Math.min(0.30, earBaseline * 0.78));
+            const high = Math.max(low + 0.02, Math.min(0.36, earBaseline * 0.92));
             return { low, high };
         }
         return { low: BLINK_LOW_THRESHOLD, high: BLINK_HIGH_THRESHOLD };
@@ -779,7 +779,7 @@ function initKiosk() {
             else hideInstruction();
             const ears = getEyeEARs(landmarks);
             const avgEAR = ears.avgEAR;
-            const stable = isFaceStable(detections.detection?.box);
+            const stable = isFaceStable(detections.detection?.box) || isFaceCentered(detections);
             const yaw = getYaw(landmarks);
             updateEarBaseline(avgEAR, stable, yaw);
             const thresholds = getBlinkThresholds();
@@ -793,7 +793,7 @@ function initKiosk() {
             }
         } else if (step === 'mouth') {
             hideInstruction();
-            const stable = isFaceStable(detections.detection?.box);
+            const stable = isFaceStable(detections.detection?.box) || isFaceCentered(detections);
             const yaw = getYaw(landmarks);
             const mar = getMAR(landmarks);
             const done = updateMouthState(mar, stable, yaw);
@@ -811,7 +811,7 @@ function initKiosk() {
             const ok =
                 (step === 'left' && yaw <= -YAW_TURN_THRESHOLD) ||
                 (step === 'right' && yaw >= YAW_TURN_THRESHOLD);
-            const stable = isFaceStable(detections.detection?.box);
+            const stable = isFaceStable(detections.detection?.box) || isFaceCentered(detections);
             if (ok && stable) headStableFrames += 1;
             else headStableFrames = 0;
             if (headStableFrames >= HEAD_STABLE_FRAMES_REQUIRED) {
