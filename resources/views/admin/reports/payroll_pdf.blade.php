@@ -29,7 +29,7 @@
         <tbody>
             @foreach($payrolls as $row)
             <tr>
-                <td>{{ $row->user->name }}</td>
+                <td>{{ optional($row->user)->name ?? '-' }}</td>
                 <td class="amount">Rp {{ number_format($row->total_salary, 0, ',', '.') }}</td>
             </tr>
             @endforeach

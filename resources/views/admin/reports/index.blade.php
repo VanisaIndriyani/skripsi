@@ -130,9 +130,9 @@
                             <td>
                                 <div class="d-flex align-items-center">
                                     <div class="bg-primary-light text-primary rounded-circle d-flex align-items-center justify-content-center me-2 fw-bold small" style="width: 30px; height: 30px;">
-                                        {{ substr($row->user->name, 0, 1) }}
+                                        {{ substr(optional($row->user)->name ?? '-', 0, 1) }}
                                     </div>
-                                    {{ $row->user->name }}
+                                    {{ optional($row->user)->name ?? '-' }}
                                 </div>
                             </td>
                             <td class="fw-bold text-success text-end pe-4">Rp {{ number_format($row->total_salary, 0, ',', '.') }}</td>

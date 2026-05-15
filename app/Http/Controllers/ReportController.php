@@ -119,7 +119,7 @@ class ReportController extends Controller
 
                 foreach ($data as $item) {
                     fputcsv($file, array(
-                        $item->user->name,
+                        optional($item->user)->name ?? '-',
                         'Rp ' . number_format($item->total_salary, 0, ',', '.')
                     ));
                 }
