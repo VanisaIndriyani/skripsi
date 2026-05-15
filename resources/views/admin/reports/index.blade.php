@@ -120,7 +120,6 @@
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th class="ps-4">Periode</th>
                             <th>Karyawan</th>
                             <th class="text-end pe-4">Total Gaji</th>
                         </tr>
@@ -128,15 +127,6 @@
                     <tbody>
                         @forelse($data as $row)
                         <tr>
-                            <td class="ps-4">
-                                <span class="fw-bold text-dark">
-                                    @if($row->start_date && $row->end_date)
-                                        {{ \Carbon\Carbon::parse($row->start_date)->format('d M') }} - {{ \Carbon\Carbon::parse($row->end_date)->format('d M Y') }}
-                                    @else
-                                        {{ date('F Y', mktime(0, 0, 0, $row->month, 10)) }}
-                                    @endif
-                                </span>
-                            </td>
                             <td>
                                 <div class="d-flex align-items-center">
                                     <div class="bg-primary-light text-primary rounded-circle d-flex align-items-center justify-content-center me-2 fw-bold small" style="width: 30px; height: 30px;">
@@ -149,7 +139,7 @@
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="3" class="text-center py-5 text-muted">
+                            <td colspan="2" class="text-center py-5 text-muted">
                                 <img src="https://illustrations.popsy.co/gray/surr-list-is-empty.svg" width="120" class="mb-3 opacity-50">
                                 <p>Tidak ada data penggajian pada periode ini.</p>
                             </td>

@@ -54,7 +54,7 @@
         /* Sidebar Styles */
         .sidebar {
             background-color: var(--sidebar-bg);
-            min-height: 100vh;
+            height: 100vh;
             border-right: 1px solid #333;
             width: var(--sidebar-width);
             transition: width 0.3s ease;
@@ -62,7 +62,8 @@
             top: 0;
             left: 0;
             z-index: 1000;
-            overflow: hidden;
+            overflow-x: hidden;
+            overflow-y: auto;
         }
         
         .sidebar.collapsed {

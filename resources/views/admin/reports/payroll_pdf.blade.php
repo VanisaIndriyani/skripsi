@@ -22,7 +22,6 @@
     <table>
         <thead>
             <tr>
-                <th>Periode Gaji</th>
                 <th>Nama Karyawan</th>
                 <th class="amount">Total Diterima</th>
             </tr>
@@ -30,13 +29,6 @@
         <tbody>
             @foreach($payrolls as $row)
             <tr>
-                <td>
-                    @if($row->start_date && $row->end_date)
-                        {{ \Carbon\Carbon::parse($row->start_date)->format('d M') }} - {{ \Carbon\Carbon::parse($row->end_date)->format('d M Y') }}
-                    @else
-                        {{ date('F Y', mktime(0, 0, 0, $row->month, 10)) }}
-                    @endif
-                </td>
                 <td>{{ $row->user->name }}</td>
                 <td class="amount">Rp {{ number_format($row->total_salary, 0, ',', '.') }}</td>
             </tr>

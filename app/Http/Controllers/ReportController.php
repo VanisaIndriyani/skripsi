@@ -11,6 +11,20 @@ use Carbon\Carbon;
 
 class ReportController extends Controller
 {
+    private function getPayrollTotalsByEmployee(string $start_date, string $end_date)
+    {
+        return Payroll::query()
+            ->selectRaw('user_id, SUM(total_salary) as total_salary')
+            ->whereNotNull('start_date')
+            ->whereNotNull('end_date')
+            ->whereDate('start_date', '<=', $end_date)
+            ->whereDate('end_date', '>=', $start_date)
+            ->groupBy('user_id')
+            ->with('user')
+            ->orderByDesc('total_salary')
+            ->get();
+    }
+
     public function index(Request $request)
     {
         $type = $request->input('type', 'attendance');
@@ -24,14 +38,7 @@ class ReportController extends Controller
                 ->orderBy('date', 'desc')
                 ->get();
         } elseif ($type == 'payroll') {
-            // For payrolls with start_date/end_date logic
-            $data = Payroll::with('user')
-                ->where(function($q) use ($start_date, $end_date) {
-                    $q->whereBetween('start_date', [$start_date, $end_date])
-                      ->orWhereBetween('end_date', [$start_date, $end_date]);
-                })
-                ->orderBy('start_date', 'desc')
-                ->get();
+            $data = $this->getPayrollTotalsByEmployee($start_date, $end_date);
         }
 
         return view('admin.reports.index', compact('data', 'type', 'start_date', 'end_date'));
@@ -53,13 +60,7 @@ class ReportController extends Controller
             return $pdf->download('laporan-absensi-' . $start_date . '-to-' . $end_date . '.pdf');
 
         } elseif ($type == 'payroll') {
-            $payrolls = Payroll::with('user')
-                ->where(function($q) use ($start_date, $end_date) {
-                    $q->whereBetween('start_date', [$start_date, $end_date])
-                      ->orWhereBetween('end_date', [$start_date, $end_date]);
-                })
-                ->orderBy('start_date', 'asc')
-                ->get();
+            $payrolls = $this->getPayrollTotalsByEmployee($start_date, $end_date);
 
             $pdf = Pdf::loadView('admin.reports.payroll_pdf', compact('payrolls', 'start_date', 'end_date'));
             return $pdf->download('laporan-penggajian-' . $start_date . '-to-' . $end_date . '.pdf');
@@ -108,15 +109,9 @@ class ReportController extends Controller
                 fclose($file);
             };
         } else {
-            $data = Payroll::with('user')
-                ->where(function($q) use ($start_date, $end_date) {
-                    $q->whereBetween('start_date', [$start_date, $end_date])
-                      ->orWhereBetween('end_date', [$start_date, $end_date]);
-                })
-                ->orderBy('start_date', 'asc')
-                ->get();
+            $data = $this->getPayrollTotalsByEmployee($start_date, $end_date);
 
-            $columns = array('Periode', 'Nama Karyawan', 'Total Sesi', 'Gaji Per Sesi', 'Total Gaji');
+            $columns = array('Nama Karyawan', 'Total Gaji');
 
             $callback = function() use($data, $columns) {
                 $file = fopen('php://output', 'w');
@@ -124,10 +119,7 @@ class ReportController extends Controller
 
                 foreach ($data as $item) {
                     fputcsv($file, array(
-                        $item->start_date->format('d/m/Y') . ' - ' . $item->end_date->format('d/m/Y'),
                         $item->user->name,
-                        $item->total_sessions,
-                        'Rp ' . number_format($item->session_wage, 0, ',', '.'),
                         'Rp ' . number_format($item->total_salary, 0, ',', '.')
                     ));
                 }
