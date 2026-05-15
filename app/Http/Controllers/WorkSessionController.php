@@ -39,6 +39,10 @@ class WorkSessionController extends Controller
 
     public function store(Request $request)
     {
+        $request->merge([
+            'wage' => preg_replace('/[^\d]/', '', (string) $request->input('wage')),
+        ]);
+
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'date' => 'required|date',

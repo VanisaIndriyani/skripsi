@@ -171,7 +171,7 @@
                         <label class="form-label text-muted small fw-bold">Upah Per Sesi (Rp)</label>
                         <div class="input-group">
                             <span class="input-group-text bg-light">Rp</span>
-                            <input type="number" class="form-control" name="wage" required placeholder="150000">
+                            <input type="text" class="form-control js-rupiah" name="wage" required inputmode="numeric" autocomplete="off" placeholder="150.000">
                         </div>
                     </div>
                 </div>
@@ -280,6 +280,25 @@
             });
         });
     }
+
+    function formatRupiah(value) {
+        const digits = String(value ?? '').replace(/\D/g, '');
+        if (!digits) return '';
+        return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    }
+
+    document.addEventListener('input', function (e) {
+        if (!e.target || !e.target.classList || !e.target.classList.contains('js-rupiah')) return;
+        e.target.value = formatRupiah(e.target.value);
+    });
+
+    document.addEventListener('submit', function (e) {
+        const form = e.target;
+        if (!form || !form.querySelectorAll) return;
+        form.querySelectorAll('.js-rupiah').forEach(input => {
+            input.value = String(input.value ?? '').replace(/\D/g, '');
+        });
+    });
 
     syncBulkDeleteUi();
 
