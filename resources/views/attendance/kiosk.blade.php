@@ -6,6 +6,7 @@
     <title>Absensi Kiosk - PT Putra Muara Sukses</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
         @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -140,6 +141,24 @@
     </div>
 
     <script>
+        @if(session('success'))
+            Swal.fire({
+                icon: 'success',
+                title: 'Berhasil!',
+                text: "{{ session('success') }}",
+                confirmButtonColor: '#D4AF37'
+            });
+        @endif
+
+        @if(session('error'))
+            Swal.fire({
+                icon: 'error',
+                title: 'Gagal!',
+                text: "{{ session('error') }}",
+                confirmButtonColor: '#D4AF37'
+            });
+        @endif
+
         window.__KIOSK__ = {
             activeSession: @json((bool) $activeSession),
             attendedUserIds: @json($attendedUserIds ?? []),
