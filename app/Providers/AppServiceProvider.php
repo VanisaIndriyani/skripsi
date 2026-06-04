@@ -14,7 +14,7 @@ class AppServiceProvider extends ServiceProvider
     {
         if (env('APP_ENV') !== 'local') {
             $this->app->bind('path.public', function() {
-                return '/home/facepayr/public_html';
+                return base_path('public');
             });
         }
     }
