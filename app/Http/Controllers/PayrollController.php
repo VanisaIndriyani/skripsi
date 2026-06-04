@@ -100,6 +100,41 @@ class PayrollController extends Controller
         return redirect()->route('admin.payrolls')->with('success', "Generated payroll for $count employees (Period: " . $startDate->format('d M') . " - " . $endDate->format('d M Y') . ").");
     }
 
+    public function show(Payroll $payroll)
+    {
+        $payroll->load('user');
+        
+        $attendances = Attendance::with('workSession')
+            ->where('user_id', $payroll->user_id)
+            ->whereBetween('date', [$payroll->start_date, $payroll->end_date])
+            ->where('status', 'present')
+            ->whereNotNull('work_session_id')
+            ->get();
+
+        return response()->json([
+            'payroll' => $payroll,
+            'attendances' => $attendances->map(function($a) {
+                return [
+                    'date' => Carbon::parse($a->date)->format('d M Y'),
+                    'session' => $a->workSession->title,
+                    'wage' => $a->workSession->wage,
+                    'time' => Carbon::parse($a->time_in)->format('H:i')
+                ];
+            })
+        ]);
+    }
+
+    public function updateStatus(Request $request, Payroll $payroll)
+    {
+        $request->validate([
+            'status' => 'required|in:pending,paid'
+        ]);
+
+        $payroll->update(['status' => $request->status]);
+
+        return response()->json(['success' => true, 'status' => $payroll->status]);
+    }
+
     public function print(Payroll $payroll)
     {
         // Get all attendances related to this payroll's date range

@@ -82,6 +82,8 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::get('/admin/payrolls', [PayrollController::class, 'index'])->name('admin.payrolls');
     Route::get('/admin/payrolls/create', [PayrollController::class, 'create'])->name('admin.payrolls.create');
     Route::post('/admin/payrolls', [PayrollController::class, 'store'])->name('admin.payrolls.store');
+    Route::get('/admin/payrolls/{payroll}', [PayrollController::class, 'show'])->name('admin.payrolls.show');
+    Route::patch('/admin/payrolls/{payroll}/status', [PayrollController::class, 'updateStatus'])->name('admin.payrolls.updateStatus');
     Route::get('/admin/payrolls/{payroll}/print', [PayrollController::class, 'print'])->name('admin.payrolls.print');
 
     // Reports
