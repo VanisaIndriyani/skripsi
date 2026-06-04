@@ -772,7 +772,7 @@ function initKiosk() {
         if (!livenessSequence.length) initLivenessChallenge();
         const step = livenessSequence[livenessStepIndex] || 'left';
         setVideoState('detecting');
-        showInstruction(step === 'left' ? 'Putar kepala ke kiri untuk verifikasi' : 'Putar kepala ke kanan untuk verifikasi');
+        showInstruction(step === 'left' ? 'Nengok ke kiri untuk verifikasi' : 'Nengok ke kanan untuk verifikasi');
         const yaw = getYaw(landmarks);
         const ok =
             (step === 'left' && yaw <= -YAW_TURN_THRESHOLD) ||
