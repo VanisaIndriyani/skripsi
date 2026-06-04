@@ -52,7 +52,6 @@
                             <input class="form-check-input" type="checkbox" id="selectAllEmployees">
                         </th>
                         <th class="ps-4">Karyawan</th>
-                        <th>No. HP</th>
                         <th>Status</th>
                         <th class="text-end pe-4">Aksi</th>
                     </tr>
@@ -77,7 +76,6 @@
                                 </div>
                             </div>
                         </td>
-                        <td>{{ $employee->phone_number ?? '-' }}</td>
                         <td><span class="badge bg-success-light text-success rounded-pill px-3">Aktif</span></td>
                         <td class="text-end pe-4">
                             <div class="d-flex justify-content-end gap-2">
@@ -116,10 +114,6 @@
                                         <div class="mb-3">
                                             <label class="form-label text-muted small fw-bold">Nama Lengkap</label>
                                             <input type="text" class="form-control" name="name" value="{{ $employee->name }}" required>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label class="form-label text-muted small fw-bold">No. HP (Opsional)</label>
-                                            <input type="text" class="form-control" name="phone_number" value="{{ $employee->phone_number }}">
                                         </div>
                                         <div class="mb-3">
                                             <label class="form-label text-muted small fw-bold">Ganti Foto</label>
@@ -165,10 +159,6 @@
                     <div class="mb-3">
                         <label class="form-label text-muted small fw-bold">Nama Lengkap</label>
                         <input type="text" class="form-control" name="name" required placeholder="Contoh: Budi Santoso">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label text-muted small fw-bold">No. HP (Opsional)</label>
-                        <input type="text" class="form-control" name="phone_number" placeholder="Contoh: 08123456789">
                     </div>
                     <div class="mb-3">
                         <label class="form-label text-muted small fw-bold">Upload Foto Wajah (Wajib)</label>

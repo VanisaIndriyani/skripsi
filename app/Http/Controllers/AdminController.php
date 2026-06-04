@@ -76,7 +76,6 @@ class AdminController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'phone_number' => 'nullable|string|max:20',
             'photo' => 'required|image|mimes:jpeg,png,jpg|max:2048', // Photo is now file upload
         ]);
 
@@ -97,7 +96,6 @@ class AdminController extends Controller
             'role' => 'employee',
             'position' => 'Karyawan Harian', // Default position or make nullable
             'base_salary' => 0, 
-            'phone_number' => $request->phone_number,
             'photo' => $photoPath,
         ]);
 
@@ -110,7 +108,6 @@ class AdminController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'phone_number' => 'nullable|string|max:20',
             'photo' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
         ]);
 
@@ -125,7 +122,6 @@ class AdminController extends Controller
 
         $user->update([
             'name' => $validated['name'],
-            'phone_number' => $request->phone_number,
             'photo' => $photoPath,
         ]);
 
