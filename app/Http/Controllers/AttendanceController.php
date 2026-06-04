@@ -142,7 +142,7 @@ class AttendanceController extends Controller
         try {
             $compare = $this->faceppCompare($capturedBytes, $employeeBytes);
         } catch (\Throwable $e) {
-            return redirect()->back()->with('error', 'Gagal verifikasi wajah (Face++). Coba lagi.');
+            return redirect()->back()->with('error', 'Gagal verifikasi wajah: ' . $e->getMessage());
         }
 
         $minConfidence = (float) env('FACEPP_MIN_CONFIDENCE', 75);
