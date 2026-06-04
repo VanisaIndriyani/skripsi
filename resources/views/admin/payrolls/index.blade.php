@@ -62,9 +62,13 @@
                     <tr>
                         <td class="ps-4">
                             <div class="d-flex align-items-center">
-                                <div class="avatar-circle bg-gold-light text-gold fw-bold d-flex align-items-center justify-content-center me-3" style="width: 45px; height: 45px; border-radius: 12px;">
-                                    {{ substr($payroll->user->name, 0, 1) }}
-                                </div>
+                                @if($payroll->user->photo)
+                                    <img src="{{ asset('storage/' . $payroll->user->photo) }}" class="rounded-circle me-3" style="width: 45px; height: 45px; object-fit: cover; border: 2px solid #eee;">
+                                @else
+                                    <div class="avatar-circle bg-gold-light text-gold fw-bold d-flex align-items-center justify-content-center me-3" style="width: 45px; height: 45px; border-radius: 12px;">
+                                        {{ substr($payroll->user->name, 0, 1) }}
+                                    </div>
+                                @endif
                                 <div>
                                     <div class="fw-bold text-dark">{{ $payroll->user->name }}</div>
                                     <small class="text-muted"><i class="fas fa-id-badge me-1"></i> #{{ str_pad($payroll->user->id, 4, '0', STR_PAD_LEFT) }}</small>
@@ -98,10 +102,10 @@
                         </td>
                         <td class="text-end pe-4">
                             <div class="d-flex justify-content-end gap-2">
-                                <a href="{{ route('admin.payrolls.print', $payroll->id) }}" target="_blank" class="btn btn-sm btn-light text-primary rounded-circle shadow-sm p-2" title="Cetak Slip Gaji">
+                                <a href="{{ route('admin.payrolls.print', $payroll->id) }}" target="_blank" class="btn btn-sm btn-outline-primary rounded-circle shadow-sm" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;" title="Cetak Slip Gaji">
                                     <i class="fas fa-print fa-fw"></i>
                                 </a>
-                                <button class="btn btn-sm btn-light text-info rounded-circle shadow-sm p-2" title="Detail">
+                                <button class="btn btn-sm btn-outline-info rounded-circle shadow-sm" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;" title="Detail">
                                     <i class="fas fa-info-circle fa-fw"></i>
                                 </button>
                             </div>
