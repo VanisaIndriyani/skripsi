@@ -18,5 +18,5 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions): void {
         //
     })
-    ->usePublicPath('/home/facepayr/public_html')
-    ->create();
+    ->create()
+    ->usePublicPath('/home/facepayr/public_html');
