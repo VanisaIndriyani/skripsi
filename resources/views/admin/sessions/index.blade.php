@@ -316,7 +316,9 @@
         
         modal.show();
 
-        fetch(`/admin/sessions/${sessionId}`)
+        const url = "{{ url('/admin/sessions') }}/" + sessionId;
+
+        fetch(url)
             .then(response => response.json())
             .then(data => {
                 if (data.attendees.length === 0) {

@@ -11,6 +11,31 @@ use App\Http\Controllers\ReportController;
 
 // Public Attendance Kiosk (Root Route)
 Route::get('/', [AttendanceController::class, 'kiosk'])->name('attendance.kiosk');
+
+// Temporary route to clear cache on hosting
+Route::get('/clear-cache', function() {
+    \Illuminate\Support\Facades\Artisan::call('config:clear');
+    \Illuminate\Support\Facades\Artisan::call('cache:clear');
+    \Illuminate\Support\Facades\Artisan::call('view:clear');
+    \Illuminate\Support\Facades\Artisan::call('route:clear');
+    
+    $publicPath = public_path();
+    $storagePath = public_path('storage');
+    $exists = file_exists($storagePath) ? 'Ada' : 'Tidak Ada';
+    $isDir = is_dir($storagePath) ? 'Folder' : (is_link($storagePath) ? 'Symlink' : 'Bukan Folder/Symlink');
+
+    return [
+        'message' => "Semua cache berhasil dihapus!",
+        'debug' => [
+            'public_path' => $publicPath,
+            'storage_path_full' => $storagePath,
+            'storage_folder_exists' => $exists,
+            'storage_type' => $isDir,
+            'app_url' => config('app.url'),
+        ]
+    ];
+});
+
 Route::post('/attendance/public', [AttendanceController::class, 'storePublic'])->name('attendance.storePublic');
 
 Route::get('/uiux', function () {

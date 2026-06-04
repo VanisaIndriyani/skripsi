@@ -12,7 +12,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        if (env('APP_ENV') !== 'local') {
+            $this->app->bind('path.public', function() {
+                return '/home/facepayr/public_html';
+            });
+        }
     }
 
     /**
