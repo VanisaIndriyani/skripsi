@@ -166,17 +166,55 @@
 .kiosk-page .landing-container {
     text-align: center;
     width: 100%;
-    max-width: 600px;
+    max-width: 520px;
     z-index: 1;
+}
+
+.kiosk-page .landing-hero-card {
+    position: relative;
+    padding: 34px 28px 26px;
+    border-radius: 34px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03)),
+        rgba(8, 8, 8, 0.64);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow:
+        0 28px 70px rgba(0, 0, 0, 0.46),
+        0 1px 0 rgba(255, 255, 255, 0.08) inset;
+    backdrop-filter: blur(22px);
+    overflow: hidden;
+}
+
+.kiosk-page .landing-hero-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(420px 220px at 50% -10%, rgba(212, 175, 55, 0.16), transparent 70%),
+        linear-gradient(135deg, rgba(212, 175, 55, 0.05), transparent 35%, rgba(255, 255, 255, 0.02));
+    pointer-events: none;
 }
 
 .kiosk-page .logo-wrapper {
     position: relative;
-    display: inline-block;
-    margin-bottom: 30px;
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    margin: 0 auto 20px;
+}
+
+.kiosk-page .logo-ring {
+    position: absolute;
+    inset: -14px;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(212, 175, 55, 0.14), transparent 65%);
+    filter: blur(10px);
+    z-index: 0;
 }
 
 .kiosk-page .logo-landing {
+    position: relative;
+    z-index: 1;
     width: 130px;
     height: 130px;
     border-radius: 50%;
@@ -187,23 +225,67 @@
     object-fit: cover;
 }
 
+.kiosk-page .landing-copy {
+    position: relative;
+    z-index: 1;
+    margin-bottom: 20px;
+}
+
 .kiosk-page .company-name {
     font-weight: 700;
-    letter-spacing: 2px;
-    margin-bottom: 5px;
+    font-size: 1.5rem;
+    letter-spacing: 1.4px;
+    margin-bottom: 0;
     background: linear-gradient(to right, #fff, var(--primary-color));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
 .kiosk-page .clock-container {
-    background: var(--glass-bg);
-    backdrop-filter: blur(10px);
-    border: 1px solid var(--glass-border);
-    padding: 30px;
-    border-radius: 30px;
-    margin-bottom: 40px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    position: relative;
+    z-index: 1;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    padding: 22px 24px;
+    border-radius: 28px;
+    margin-bottom: 20px;
+    box-shadow: 0 18px 38px rgba(0,0,0,0.30);
+}
+
+.kiosk-page .clock-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.kiosk-page .clock-label {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.kiosk-page .clock-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    background: rgba(34, 197, 94, 0.10);
+    border: 1px solid rgba(34, 197, 94, 0.18);
+    color: rgba(187, 247, 208, 0.98);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.kiosk-page .clock-main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .kiosk-page .clock-widget {
@@ -223,38 +305,181 @@
 }
 
 .kiosk-page .session-info {
-    background: rgba(212, 175, 55, 0.1);
-    border: 1px solid rgba(212, 175, 55, 0.2);
-    padding: 15px 25px;
-    border-radius: 100px;
-    display: inline-flex;
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    background: rgba(212, 175, 55, 0.08);
+    border: 1px solid rgba(212, 175, 55, 0.18);
+    padding: 16px 18px;
+    border-radius: 24px;
+    display: flex;
     align-items: center;
-    margin-bottom: 40px;
+    gap: 14px;
+    margin-bottom: 20px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.18);
+}
+
+.kiosk-page .session-dot-wrap {
+    width: 42px;
+    height: 42px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(34, 197, 94, 0.14);
+    border: 1px solid rgba(34, 197, 94, 0.18);
+    flex: 0 0 auto;
+}
+
+.kiosk-page .session-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 999px;
+    background: rgba(34, 197, 94, 0.98);
+    box-shadow: 0 0 0 6px rgba(34, 197, 94, 0.12);
+}
+
+.kiosk-page .session-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.kiosk-page .session-title {
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.96);
+}
+
+.kiosk-page .session-time {
+    font-size: 0.88rem;
+    color: rgba(255, 255, 255, 0.68);
+}
+
+.kiosk-page .kiosk-result-card {
+    margin: 24px auto 0;
+    max-width: 520px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 20px;
+    border-radius: 24px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(18px);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.32);
+}
+
+.kiosk-page .kiosk-result-card.is-success {
+    border-color: rgba(34, 197, 94, 0.26);
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.16), rgba(255, 255, 255, 0.05));
+}
+
+.kiosk-page .kiosk-result-card.is-error {
+    border-color: rgba(239, 68, 68, 0.26);
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.16), rgba(255, 255, 255, 0.05));
+}
+
+.kiosk-page .kiosk-result-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    font-size: 1.35rem;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.kiosk-page .kiosk-result-card.is-success .kiosk-result-icon {
+    color: rgba(134, 239, 172, 0.98);
+}
+
+.kiosk-page .kiosk-result-card.is-error .kiosk-result-icon {
+    color: rgba(252, 165, 165, 0.98);
+}
+
+.kiosk-page .kiosk-result-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    text-align: left;
+}
+
+.kiosk-page .kiosk-result-title {
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.kiosk-page .kiosk-result-message {
+    color: rgba(255, 255, 255, 0.72);
+    line-height: 1.45;
 }
 
 .kiosk-page .start-btn {
-    width: 250px;
-    height: 70px;
-    background: var(--primary-color);
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    min-height: 82px;
+    padding: 16px 22px;
+    background: linear-gradient(135deg, #f6dd8f, #d4af37, #b88910);
     color: #000;
     border: none;
-    border-radius: 100px;
-    font-size: 1.2rem;
+    border-radius: 26px;
+    font-size: 1.05rem;
     font-weight: 700;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 15px;
+    gap: 14px;
     cursor: pointer;
-    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    box-shadow: 0 10px 20px rgba(212, 175, 55, 0.3);
+    transition: transform 220ms ease, box-shadow 220ms ease, filter 220ms ease;
+    box-shadow: 0 18px 32px rgba(212, 175, 55, 0.30);
     margin: 0 auto;
 }
 
 .kiosk-page .start-btn:hover {
-    transform: translateY(-5px) scale(1.02);
-    box-shadow: 0 15px 30px rgba(212, 175, 55, 0.4);
-    background: var(--primary-light);
+    transform: translateY(-3px);
+    box-shadow: 0 22px 36px rgba(212, 175, 55, 0.36);
+    filter: brightness(1.03);
+}
+
+.kiosk-page .start-btn-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.12);
+    flex: 0 0 auto;
+}
+
+.kiosk-page .start-btn-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+}
+
+.kiosk-page .start-btn-copy strong {
+    font-size: 1rem;
+    line-height: 1.1;
+}
+
+.kiosk-page .landing-footer {
+    position: relative;
+    z-index: 1;
+}
+
+.kiosk-page .admin-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .kiosk-page .scan-overlay {
@@ -284,16 +509,17 @@
 
 .kiosk-page .scan-container {
     width: 100%;
-    max-width: 320px;
+    max-width: 460px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 18px;
+    min-height: 0;
 }
 
 .kiosk-page .scan-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
     gap: 12px;
 }
 
@@ -301,27 +527,36 @@
     display: flex;
     flex-direction: column;
     line-height: 1.1;
+    text-align: center;
 }
 
 .kiosk-page .scan-title strong {
-    font-size: 0.95rem;
-    letter-spacing: 0.4px;
+    font-size: 1.32rem;
+    letter-spacing: 0.04em;
 }
 
-.kiosk-page .scan-title span {
-    font-size: 0.78rem;
-    color: rgba(255, 255, 255, 0.65);
+.kiosk-page .status-badge {
+    display: none !important;
+}
+
+.kiosk-page .camera-stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
 }
 
 .kiosk-page .video-container {
     position: relative;
-    width: 100%;
-    aspect-ratio: 3/4;
-    border-radius: 40px;
+    width: min(78vw, 320px);
+    aspect-ratio: 1 / 1;
+    border-radius: 999px;
     overflow: hidden;
-    border: 2px solid rgba(212, 175, 55, 0.65);
+    border: 3px solid rgba(212, 175, 55, 0.72);
     background: rgba(10, 10, 10, 0.85);
-    box-shadow: 0 20px 60px rgba(0,0,0,0.55);
+    box-shadow:
+        0 24px 60px rgba(0,0,0,0.55),
+        0 0 0 10px rgba(255, 255, 255, 0.03);
     transition: box-shadow 220ms ease, border-color 220ms ease, transform 220ms ease;
 }
 
@@ -345,7 +580,7 @@
     content: "";
     position: absolute;
     inset: -2px;
-    border-radius: 42px;
+    border-radius: 999px;
     background: conic-gradient(
         from 180deg,
         rgba(212, 175, 55, 0.0),
@@ -388,10 +623,10 @@
 
 .kiosk-page .face-guide::before {
     content: "";
-    width: 72%;
-    height: 62%;
+    width: 74%;
+    height: 74%;
     border-radius: 999px;
-    border: 1.5px solid rgba(212, 175, 55, 0.35);
+    border: 2px solid rgba(212, 175, 55, 0.40);
     box-shadow:
         0 0 0 9999px rgba(0, 0, 0, 0.34) inset,
         0 0 20px rgba(212, 175, 55, 0.12);
@@ -420,52 +655,6 @@
 .kiosk-page .video-container.is-loading .camera-loading {
     opacity: 1;
     pointer-events: auto;
-}
-
-.kiosk-page .kiosk-challenge {
-    position: absolute;
-    left: 12px;
-    right: 12px;
-    bottom: 12px;
-    z-index: 7;
-    display: none;
-}
-
-.kiosk-page .kiosk-challenge.is-visible {
-    display: block;
-}
-
-.kiosk-page .kiosk-challenge-card {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    border-radius: 16px;
-    background: rgba(0, 0, 0, 0.55);
-    border: 1px solid rgba(212, 175, 55, 0.18);
-    backdrop-filter: blur(14px);
-    box-shadow: 0 14px 38px rgba(0, 0, 0, 0.45);
-}
-
-.kiosk-page .kiosk-challenge-icon {
-    width: 36px;
-    height: 36px;
-    border-radius: 999px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(212, 175, 55, 0.10);
-    border: 1px solid rgba(212, 175, 55, 0.22);
-    color: rgba(241, 210, 122, 0.98);
-    flex: 0 0 auto;
-}
-
-.kiosk-page .kiosk-challenge-text {
-    font-weight: 800;
-    letter-spacing: 0.1px;
-    font-size: 0.9rem;
-    line-height: 1.15;
-    color: rgba(255, 255, 255, 0.92);
 }
 
 .kiosk-page .camera-loading .loader-orb {
@@ -531,17 +720,26 @@
 }
 
 .kiosk-page .scan-info-card {
-    background: var(--surface);
-    backdrop-filter: blur(20px);
-    border: 1px solid var(--glass-border);
-    border-radius: 25px;
-    padding: 20px;
+    background: transparent;
+    backdrop-filter: none;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
     text-align: center;
-    box-shadow: 0 16px 46px rgba(0, 0, 0, 0.55);
+    box-shadow: none;
+}
+
+.kiosk-page .scan-info-card::-webkit-scrollbar {
+    width: 8px;
+}
+
+.kiosk-page .scan-info-card::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.16);
+    border-radius: 999px;
 }
 
 .kiosk-page .status-badge {
-    display: inline-flex;
+    display: none !important;
     align-items: center;
     gap: 8px;
     padding: 8px 12px;
@@ -553,33 +751,292 @@
     color: rgba(255, 255, 255, 0.86);
 }
 
-.kiosk-page .mini-instruction {
-    display: none;
-    margin: 6px auto 14px;
-    width: fit-content;
-    max-width: 100%;
-    padding: 8px 12px;
-    border-radius: 999px;
-    background: rgba(212, 175, 55, 0.12);
-    border: 1px solid rgba(212, 175, 55, 0.25);
-    color: rgba(255, 255, 255, 0.92);
-    font-weight: 700;
-    font-size: 0.9rem;
-    line-height: 1.1;
-    letter-spacing: 0.2px;
-    text-align: center;
+.kiosk-page .status-badge[data-state="detecting"] {
+    border-color: rgba(250, 204, 21, 0.24);
+    background: rgba(250, 204, 21, 0.10);
+    color: rgba(254, 240, 138, 0.98);
 }
 
-.kiosk-page .mini-instruction.is-visible {
+.kiosk-page .status-badge[data-state="instruction"] {
+    border-color: rgba(96, 165, 250, 0.24);
+    background: rgba(59, 130, 246, 0.12);
+    color: rgba(191, 219, 254, 0.98);
+}
+
+.kiosk-page .status-badge[data-state="success"] {
+    border-color: rgba(34, 197, 94, 0.28);
+    background: rgba(34, 197, 94, 0.14);
+    color: rgba(187, 247, 208, 0.98);
+}
+
+.kiosk-page .status-badge[data-state="failed"] {
+    border-color: rgba(239, 68, 68, 0.24);
+    background: rgba(239, 68, 68, 0.14);
+    color: rgba(254, 202, 202, 0.98);
+}
+
+.kiosk-page .face-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-height: 42px;
+    padding: 10px 18px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.82);
+}
+
+.kiosk-page .face-status[data-state="detecting"] {
+    color: rgba(250, 204, 21, 0.98);
+    border-color: rgba(250, 204, 21, 0.22);
+    background: rgba(250, 204, 21, 0.08);
+}
+
+.kiosk-page .face-status[data-state="instruction"] {
+    color: rgba(191, 219, 254, 0.98);
+    border-color: rgba(96, 165, 250, 0.22);
+    background: rgba(59, 130, 246, 0.10);
+}
+
+.kiosk-page .face-status[data-state="success"] {
+    color: rgba(187, 247, 208, 0.98);
+    border-color: rgba(34, 197, 94, 0.22);
+    background: rgba(34, 197, 94, 0.10);
+}
+
+.kiosk-page .face-status[data-state="failed"] {
+    color: rgba(254, 202, 202, 0.98);
+    border-color: rgba(239, 68, 68, 0.22);
+    background: rgba(239, 68, 68, 0.10);
+}
+
+.kiosk-page .face-status-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 999px;
+    background: currentColor;
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.06);
+}
+
+.kiosk-page .identity-panel {
+    margin-bottom: 18px;
+}
+
+.kiosk-page #detected_name {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-size: 1.7rem !important;
+    line-height: 1.15;
+}
+
+.kiosk-page .instruction-panel {
+    position: relative;
+    overflow: hidden;
+    margin: 0 0 16px;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    text-align: center;
+    transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.kiosk-page .instruction-panel::before {
+    display: none;
+}
+
+.kiosk-page .instruction-panel.is-updating::before {
+    opacity: 1;
+}
+
+.kiosk-page .instruction-panel[data-state="detecting"] {
+    border-color: rgba(250, 204, 21, 0.2);
+}
+
+.kiosk-page .instruction-panel[data-state="instruction"] {
+    border-color: rgba(96, 165, 250, 0.22);
+}
+
+.kiosk-page .instruction-panel[data-state="success"] {
+    border-color: rgba(34, 197, 94, 0.24);
+}
+
+.kiosk-page .instruction-panel[data-state="failed"] {
+    border-color: rgba(239, 68, 68, 0.22);
+}
+
+.kiosk-page .instruction-step-title {
+    display: none;
+}
+
+.kiosk-page .instruction-status-chip {
     display: inline-flex;
     align-items: center;
     gap: 8px;
+    padding: 0;
+    border-radius: 999px;
+    border: 0;
+    background: transparent;
+    font-size: 0.82rem;
+    font-weight: 700;
+    white-space: nowrap;
+    justify-content: center;
 }
 
-.kiosk-page .mini-instruction i {
-    width: 18px;
+.kiosk-page .instruction-status-chip[data-state="detecting"] {
+    color: rgba(254, 240, 138, 0.98);
+    border-color: rgba(250, 204, 21, 0.24);
+    background: rgba(250, 204, 21, 0.10);
+}
+
+.kiosk-page .instruction-status-chip[data-state="instruction"] {
+    color: rgba(191, 219, 254, 0.98);
+    border-color: rgba(96, 165, 250, 0.24);
+    background: rgba(59, 130, 246, 0.12);
+}
+
+.kiosk-page .instruction-status-chip[data-state="success"] {
+    color: rgba(187, 247, 208, 0.98);
+    border-color: rgba(34, 197, 94, 0.26);
+    background: rgba(34, 197, 94, 0.12);
+}
+
+.kiosk-page .instruction-status-chip[data-state="failed"] {
+    color: rgba(254, 202, 202, 0.98);
+    border-color: rgba(239, 68, 68, 0.24);
+    background: rgba(239, 68, 68, 0.14);
+}
+
+.kiosk-page .instruction-status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: currentColor;
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.08);
+}
+
+.kiosk-page .instruction-panel-body {
+    display: block;
+    margin: 10px 0;
+    position: relative;
+    z-index: 1;
+}
+
+.kiosk-page .instruction-rule {
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.75), transparent);
+}
+
+.kiosk-page .instruction-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.kiosk-page .instruction-text {
+    font-size: 1.45rem;
+    font-weight: 700;
+    line-height: 1.25;
+    color: rgba(255, 255, 255, 0.97);
+}
+
+.kiosk-page .instruction-hint {
+    font-size: 0.96rem;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.62);
+}
+
+.kiosk-page .instruction-hint:empty {
+    display: none;
+}
+
+.kiosk-page .progress-panel {
+    margin-bottom: 18px;
     text-align: center;
-    font-size: 0.95rem;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    box-shadow: none;
+}
+
+.kiosk-page .progress-panel-header {
+    display: flex;
+    justify-content: center;
+}
+
+.kiosk-page .progress-percent {
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: var(--primary-light);
+}
+
+.kiosk-page .progress-track {
+    position: relative;
+    width: 100%;
+    height: 12px;
+    margin: 12px 0 10px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.kiosk-page .progress-fill {
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #f6dd8f, #d4af37 50%, #8d6a13);
+    box-shadow: 0 0 26px rgba(212, 175, 55, 0.28);
+    transition: width 260ms ease;
+}
+
+.kiosk-page .progress-meta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    font-size: 0.88rem;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.kiosk-page .scan-overlay.is-attendance-locked .face-status,
+.kiosk-page .scan-overlay.is-attendance-locked .progress-panel,
+.kiosk-page .scan-overlay.is-attendance-locked .instruction-status-chip,
+.kiosk-page .scan-overlay.is-attendance-locked .instruction-rule {
+    display: none;
+}
+
+.kiosk-page .scan-overlay.is-attendance-locked .instruction-panel {
+    margin-top: 8px;
+}
+
+.kiosk-page .scan-overlay.is-attendance-locked .instruction-text {
+    font-size: 1.2rem;
+}
+
+.kiosk-page .checklist-panel {
+    display: none;
+}
+
+.kiosk-page .action-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.kiosk-page .action-btn {
+    width: 100%;
+}
+
+.kiosk-page .action-btn-secondary {
+    color: rgba(255, 255, 255, 0.88);
 }
 
 .kiosk-page .btn-gold {
@@ -587,6 +1044,7 @@
     color: rgba(0, 0, 0, 0.92);
     border: none;
     font-weight: 700;
+    min-height: 58px;
     transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
     box-shadow:
         0 10px 20px rgba(212, 175, 55, 0.22),
@@ -725,36 +1183,79 @@
 }
 
 @media (max-width: 576px) {
+    .kiosk-page .landing-container { max-width: 100%; }
+    .kiosk-page .landing-hero-card { padding: 24px 18px 20px; border-radius: 26px; }
     .kiosk-page .logo-landing { width: 100px; height: 100px; }
     .kiosk-page .company-name { font-size: 1.4rem; letter-spacing: 1.2px; }
-    .kiosk-page .clock-container { padding: 18px; border-radius: 22px; }
+    .kiosk-page .clock-container { padding: 18px; border-radius: 22px; margin-bottom: 18px; }
+    .kiosk-page .clock-header { flex-direction: column; gap: 10px; }
     .kiosk-page .clock-widget { font-size: 3.2rem; }
     .kiosk-page .date-widget { font-size: 0.95rem; letter-spacing: 1.2px; }
-    .kiosk-page .session-info { padding: 12px 16px; border-radius: 22px; }
-    .kiosk-page .start-btn { width: 220px; height: 60px; font-size: 1.05rem; }
+    .kiosk-page .session-info { padding: 12px 14px; border-radius: 22px; margin-bottom: 18px; }
+    .kiosk-page .session-dot-wrap { width: 38px; height: 38px; border-radius: 14px; }
+    .kiosk-page .session-title { font-size: 0.95rem; }
+    .kiosk-page .session-time { font-size: 0.8rem; }
+    .kiosk-page .start-btn { width: 100%; min-height: 70px; padding: 14px 16px; border-radius: 22px; font-size: 1rem; }
+    .kiosk-page .start-btn-icon { width: 44px; height: 44px; border-radius: 14px; }
+    .kiosk-page .start-btn-copy strong { font-size: 0.95rem; }
+    .kiosk-page .admin-link { padding: 9px 14px; }
     .kiosk-page .scan-container {
-        padding: 10px;
-        margin: auto;
-        min-height: 100vh;
-        justify-content: center;
-        max-width: 340px;
-        gap: 14px;
+        padding: 14px 10px 10px;
+        margin: 0 auto;
+        min-height: auto;
+        height: auto;
+        max-height: none;
+        max-width: 100%;
+        gap: 16px;
     }
-    .kiosk-page .video-container { border-radius: 24px; border-width: 2px; }
-    .kiosk-page .kiosk-challenge-text { font-size: 0.82rem; }
-    .kiosk-page .scan-info-card { padding: 14px; border-radius: 20px; }
+    .kiosk-page .video-container {
+        width: min(72vw, 280px);
+        min-height: 0;
+        max-height: none;
+        border-width: 3px;
+    }
+    .kiosk-page .scan-info-card {
+        padding: 0;
+        overflow: visible;
+    }
     .kiosk-page .scan-overlay {
         overflow-y: auto;
         align-items: flex-start;
-        padding: 22px 12px;
+        padding: 12px;
     }
-    .kiosk-page .close-btn { top: 18px; right: 18px; width: 44px; height: 44px; }
-    .kiosk-page .mini-instruction {
-        font-size: 0.82rem;
-        padding: 7px 10px;
-        margin: 6px auto 12px;
+    .kiosk-page .close-btn { top: 14px; right: 14px; width: 42px; height: 42px; }
+    .kiosk-page .face-status {
+        min-height: 38px;
+        padding: 8px 14px;
+        font-size: 0.88rem;
     }
-    .kiosk-page .mini-instruction i {
-        font-size: 0.9rem;
+    .kiosk-page #detected_name {
+        font-size: 1.35rem !important;
+    }
+    .kiosk-page .instruction-text {
+        font-size: 1.08rem;
+    }
+    .kiosk-page .progress-track {
+        height: 10px;
+        margin: 10px 0 8px;
+    }
+    .kiosk-page .progress-percent {
+        font-size: 1rem;
+    }
+    .kiosk-page .progress-meta {
+        font-size: 0.78rem;
+        gap: 8px;
+    }
+    .kiosk-page .btn,
+    .kiosk-page .btn-gold {
+        min-height: 50px;
+        font-size: 0.92rem;
+    }
+    .kiosk-page .action-row {
+        gap: 10px;
+    }
+    .kiosk-page .kiosk-result-card {
+        padding: 16px;
+        border-radius: 20px;
     }
 }

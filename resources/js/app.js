@@ -57,13 +57,10 @@ function initKiosk() {
     const userIdInput = document.getElementById('user_id');
     const submitBtn = document.getElementById('submitBtn');
     const captureBtn = document.getElementById('captureBtn');
-    const actionButtons = document.getElementById('actionButtons');
     const videoContainer = document.getElementById('videoContainer');
     const successOverlay = document.getElementById('successOverlay');
     const scanInterface = document.getElementById('scanInterface');
-    const instructionToast = document.getElementById('instructionToast');
-    const challengePopup = document.getElementById('challengePopup');
-    const challengeText = document.getElementById('challengeText');
+    const progressPanel = scanInterface.querySelector('.progress-panel');
     const statusSpinner = document.getElementById('statusSpinner');
     const manualPickBtn = document.getElementById('manualPickBtn');
     const manualModal = document.getElementById('manualModal');
@@ -71,6 +68,22 @@ function initKiosk() {
     const manualCloseBtn = document.getElementById('manualModalClose');
     const manualSearch = document.getElementById('manualSearch');
     const manualList = document.getElementById('manualList');
+    const instructionPanel = document.getElementById('instructionPanel');
+    const instructionStepLabel = document.getElementById('instructionStepLabel');
+    const instructionText = document.getElementById('instructionText');
+    const instructionHint = document.getElementById('instructionHint');
+    const instructionIcon = document.getElementById('instructionIcon');
+    const instructionIconShell = document.getElementById('instructionIconShell');
+    const instructionStatusChip = document.getElementById('instructionStatusChip');
+    const instructionStatusLabel = document.getElementById('instructionStatusLabel');
+    const progressFill = document.getElementById('progressFill');
+    const progressPercent = document.getElementById('progressPercent');
+    const progressStepText = document.getElementById('progressStepText');
+    const progressStageText = document.getElementById('progressStageText');
+    const progressStatusText = document.getElementById('progressStatusText');
+    const faceStatus = document.getElementById('faceStatus');
+    const faceStatusText = document.getElementById('faceStatusText');
+    const checklistRoot = document.getElementById('verificationChecklist');
 
     if (!video || !capturedImage || !scanInterface) return;
 
@@ -111,7 +124,7 @@ function initKiosk() {
     const EYE_MOVE_REQUIRED_EVENTS = 999;
     const GAZE_YAW_MAX = 0.20;
     const GAZE_REQUIRED_FRAMES = 0;
-    const YAW_TURN_THRESHOLD = 0.18;
+    const YAW_TURN_THRESHOLD = 0.12;
     const HEAD_STABLE_FRAMES_REQUIRED = 2;
     const REQUIRE_MOUTH_STEP = false;
     const MOUTH_STEP_PROBABILITY = 0;
@@ -124,6 +137,22 @@ function initKiosk() {
     const FACE_MISSING_RESET_FRAMES = 8;
     const UNKNOWN_RESET_FRAMES = 8;
     const INSTRUCTION_HOLD_MS = 900;
+    const FACE_DETECTED_HOLD_MS = 450;
+    const PITCH_BASELINE_MIN_SAMPLES = 4;
+    const PITCH_BASELINE_MAX_SAMPLES = 12;
+    const PITCH_MOVE_THRESHOLD = 0.05;
+    const VERIFICATION_STEPS_TOTAL = 3;
+    const LIVENESS_SEQUENCE_TEMPLATE = ['move'];
+
+    const checklistItems = {
+        face: checklistRoot ? checklistRoot.querySelector('[data-check="face"]') : null,
+        lighting: checklistRoot ? checklistRoot.querySelector('[data-check="lighting"]') : null,
+        left: checklistRoot ? checklistRoot.querySelector('[data-check="left"]') : null,
+        right: checklistRoot ? checklistRoot.querySelector('[data-check="right"]') : null,
+        up: checklistRoot ? checklistRoot.querySelector('[data-check="up"]') : null,
+        down: checklistRoot ? checklistRoot.querySelector('[data-check="down"]') : null,
+        verification: checklistRoot ? checklistRoot.querySelector('[data-check="verification"]') : null,
+    };
 
     let stream = null;
 
@@ -173,13 +202,164 @@ function initKiosk() {
     let recognizedEmployeeName = "";
     let lastFaceBox = null;
     let lastInstructionShown = "";
-    let lastChallengeShown = "";
     let manualSelectedEmployee = null;
     let lastPrepUiAt = 0;
+    let faceDetectedAt = 0;
+    let pitchBaseline = null;
+    let pitchBaselineSum = 0;
+    let pitchBaselineSamples = 0;
+
+    const checklistState = {
+        face: 'pending',
+        lighting: 'pending',
+        left: 'pending',
+        right: 'pending',
+        up: 'pending',
+        down: 'pending',
+        verification: 'pending',
+    };
 
     let statusHoldUntil = 0;
     let lastStatusText = "";
     let lastStatusType = "";
+
+    function setFaceStatus(state, text) {
+        if (faceStatus) faceStatus.dataset.state = state;
+        if (faceStatusText) faceStatusText.textContent = text;
+    }
+
+    function setAlreadyAttendedUI(active) {
+        if (!scanInterface) return;
+        scanInterface.classList.toggle('is-attendance-locked', !!active);
+        if (!active) {
+            if (progressPanel) progressPanel.removeAttribute('aria-hidden');
+            return;
+        }
+        if (progressFill) progressFill.style.width = '100%';
+        if (progressPercent) progressPercent.textContent = '100%';
+        if (progressStepText) progressStepText.textContent = 'Sudah absen';
+        if (progressStatusText) progressStatusText.textContent = '';
+        if (progressPanel) progressPanel.setAttribute('aria-hidden', 'true');
+    }
+
+    function getStatusPresentation(type) {
+        if (type === 'success') return { label: 'OK', state: 'success' };
+        if (type === 'danger') return { label: 'Gagal', state: 'failed' };
+        if (type === 'warning') return { label: 'Arah', state: 'instruction' };
+        if (type === 'secondary') return { label: 'Scan', state: 'detecting' };
+        return { label: 'Scan', state: 'detecting' };
+    }
+
+    function setChecklistItemState(key, state) {
+        const item = checklistItems[key];
+        if (!item) return;
+        const icon = item.querySelector('.checklist-icon');
+        item.classList.remove('is-pending', 'is-current', 'is-complete', 'is-failed');
+        item.classList.add(`is-${state}`);
+        if (icon) {
+            if (state === 'complete') icon.innerHTML = '<i class="fas fa-check-circle"></i>';
+            else if (state === 'current') icon.innerHTML = '<i class="fas fa-circle-dot"></i>';
+            else if (state === 'failed') icon.innerHTML = '<i class="fas fa-circle-exclamation"></i>';
+            else icon.innerHTML = '<i class="fas fa-circle"></i>';
+        }
+        checklistState[key] = state;
+    }
+
+    function resetChecklist(activeKey = null) {
+        Object.keys(checklistState).forEach((key) => {
+            setChecklistItemState(key, key === activeKey ? 'current' : 'pending');
+        });
+    }
+
+    function markChecklistComplete(key) {
+        setChecklistItemState(key, 'complete');
+    }
+
+    function focusChecklistStep(key) {
+        Object.keys(checklistState).forEach((entryKey) => {
+            if (checklistState[entryKey] === 'complete') {
+                setChecklistItemState(entryKey, 'complete');
+                return;
+            }
+            setChecklistItemState(entryKey, entryKey === key ? 'current' : 'pending');
+        });
+    }
+
+    function failChecklistStep(key) {
+        setChecklistItemState(key, 'failed');
+    }
+
+    function getProgressPercent(stepNumber) {
+        const clamped = Math.min(VERIFICATION_STEPS_TOTAL, Math.max(1, stepNumber));
+        return Math.round((clamped / VERIFICATION_STEPS_TOTAL) * 100);
+    }
+
+    function updateProgress(stepNumber, stageText, statusTextValue) {
+        const clamped = Math.min(VERIFICATION_STEPS_TOTAL, Math.max(1, stepNumber));
+        const percent = getProgressPercent(clamped);
+        if (progressFill) progressFill.style.width = `${percent}%`;
+        if (progressPercent) progressPercent.textContent = `${percent}%`;
+        if (progressStepText) progressStepText.textContent = `Langkah ${clamped} dari ${VERIFICATION_STEPS_TOTAL}`;
+        if (progressStageText) progressStageText.textContent = stageText;
+        if (progressStatusText) progressStatusText.textContent = statusTextValue;
+    }
+
+    function setInstructionPanelState({
+        state = 'detecting',
+        stepLabel = 'Verifikasi',
+        text = 'Posisikan wajah di dalam bingkai.',
+        hint = '',
+        icon = 'fa-camera',
+        progressStep = 1,
+        progressLabel = text,
+        statusLabel = 'Scan',
+    }) {
+        const signature = JSON.stringify({ state, stepLabel, text, hint, icon, progressStep, progressLabel, statusLabel });
+        if (signature === lastInstructionShown) return;
+        lastInstructionShown = signature;
+
+        if (instructionPanel) {
+            instructionPanel.classList.remove('is-updating');
+            void instructionPanel.offsetWidth;
+            instructionPanel.classList.add('is-updating');
+            instructionPanel.dataset.state = state;
+        }
+        if (instructionStatusChip) instructionStatusChip.dataset.state = state;
+        if (instructionIconShell) instructionIconShell.dataset.state = state;
+        if (instructionStepLabel) instructionStepLabel.textContent = stepLabel;
+        if (instructionText) instructionText.textContent = text;
+        if (instructionHint) instructionHint.textContent = hint;
+        if (instructionStatusLabel) instructionStatusLabel.textContent = statusLabel;
+        if (instructionIcon) instructionIcon.className = `fas ${icon}`;
+        updateProgress(progressStep, progressLabel, statusLabel);
+    }
+
+    function getLivenessPrompt(step) {
+        return {
+            stepLabel: 'Verifikasi',
+            text: 'Gerakkan kepala sedikit.',
+            hint: '',
+            icon: 'fa-arrows-left-right',
+            progressStep: 2,
+            progressLabel: 'Gerakkan kepala',
+            statusLabel: 'Arah',
+            checklistKey: 'left',
+        };
+    }
+
+    function showDefaultInstruction() {
+        setInstructionPanelState({
+            state: 'detecting',
+            stepLabel: 'Verifikasi',
+            text: 'Posisikan wajah di dalam bingkai.',
+            hint: '',
+            icon: 'fa-camera',
+            progressStep: 1,
+            progressLabel: 'Deteksi wajah',
+            statusLabel: 'Scan',
+        });
+        focusChecklistStep('face');
+    }
 
     function updateStatus(text, type, holdMs = 0, force = false) {
         const now = Date.now();
@@ -198,10 +378,8 @@ function initKiosk() {
 
         statusBadge.style.display = "inline-flex";
         statusText.textContent = text;
-        statusBadge.style.borderColor =
-            type === 'success' ? 'rgba(34, 197, 94, 0.55)'
-            : type === 'danger' ? 'rgba(239, 68, 68, 0.45)'
-            : 'rgba(255, 255, 255, 0.12)';
+        const presentation = getStatusPresentation(type);
+        statusBadge.dataset.state = presentation.state;
 
         const shouldSpin = type === 'info' && (text.includes('Memeriksa') || text.includes('Menyiapkan') || text.includes('Memuat'));
         if (statusSpinner) statusSpinner.classList.toggle('d-none', !shouldSpin);
@@ -214,17 +392,20 @@ function initKiosk() {
     function showInstruction(text) {
         const t = String(text || '').trim();
         if (!t) return hideInstruction();
-        if (!challengePopup || !challengeText) return;
-        if (t === lastChallengeShown && challengePopup.classList.contains('is-visible')) return;
-        challengeText.textContent = t;
-        challengePopup.classList.add('is-visible');
-        lastChallengeShown = t;
+        setInstructionPanelState({
+            state: 'instruction',
+            stepLabel: 'Verifikasi',
+            text: t,
+            hint: '',
+            icon: 'fa-user-check',
+            progressStep: 2,
+            progressLabel: t,
+            statusLabel: 'Arah',
+        });
     }
 
     function hideInstruction() {
-        if (challengePopup) challengePopup.classList.remove('is-visible');
-        lastInstructionShown = "";
-        lastChallengeShown = "";
+        showDefaultInstruction();
     }
 
     function setCaptureReady(ready) {
@@ -460,6 +641,10 @@ function initKiosk() {
         recognizedEmployeeId = "";
         recognizedEmployeeName = "";
         lastFaceBox = null;
+        faceDetectedAt = 0;
+        pitchBaseline = null;
+        pitchBaselineSum = 0;
+        pitchBaselineSamples = 0;
         if (!isLivenessVerified) {
             isAlreadyAttended = false;
             candidateEmployee = null;
@@ -472,8 +657,7 @@ function initKiosk() {
     }
 
     function initLivenessChallenge() {
-        const dir = Math.random() < 0.5 ? 'left' : 'right';
-        livenessSequence = [dir];
+        livenessSequence = LIVENESS_SEQUENCE_TEMPLATE.slice();
         livenessStepIndex = 0;
         headStableFrames = 0;
         requiredBlinks = REQUIRED_BLINKS;
@@ -496,7 +680,8 @@ function initKiosk() {
         livenessStartedAt = null;
         livenessChallengeStartedAt = Date.now();
         if (successOverlay) successOverlay.classList.remove('is-visible');
-        showInstruction(dir === 'left' ? 'Putar kepala ke kiri untuk verifikasi' : 'Putar kepala ke kanan untuk verifikasi');
+        focusChecklistStep('face');
+        showDefaultInstruction();
     }
 
     function averagePoints(points) {
@@ -544,6 +729,21 @@ function initKiosk() {
         const noseTip = nose && nose.length ? nose[Math.min(3, nose.length - 1)] : midEye;
         if (!interEye) return 0;
         return (noseTip.x - midEye.x) / interEye;
+    }
+
+    function getPitch(landmarks) {
+        const leftEye = landmarks.getLeftEye();
+        const rightEye = landmarks.getRightEye();
+        const mouth = landmarks.getMouth();
+        const nose = landmarks.getNose();
+        if (!leftEye?.length || !rightEye?.length || !mouth?.length || !nose?.length) return 0;
+        const leftCenter = averagePoints(leftEye);
+        const rightCenter = averagePoints(rightEye);
+        const eyeMid = { x: (leftCenter.x + rightCenter.x) / 2, y: (leftCenter.y + rightCenter.y) / 2 };
+        const mouthCenter = averagePoints(mouth.slice(0, 12));
+        const noseTip = nose[Math.min(6, nose.length - 1)] || nose[nose.length - 1];
+        const faceHeight = Math.max(1, mouthCenter.y - eyeMid.y);
+        return (noseTip.y - eyeMid.y) / faceHeight;
     }
 
     function getMAR(landmarks) {
@@ -604,6 +804,35 @@ function initKiosk() {
         if (earBaselineSamples >= EAR_BASELINE_MIN_SAMPLES) {
             earBaseline = earBaselineSum / earBaselineSamples;
         }
+    }
+
+    function updatePitchBaseline(pitch, isStableFrame, yaw) {
+        if (!isStableFrame) return;
+        if (Math.abs(yaw) > 0.14) return;
+        if (pitchBaselineSamples >= PITCH_BASELINE_MAX_SAMPLES) return;
+        pitchBaselineSum += pitch;
+        pitchBaselineSamples += 1;
+        if (pitchBaselineSamples >= PITCH_BASELINE_MIN_SAMPLES) {
+            pitchBaseline = pitchBaselineSum / pitchBaselineSamples;
+        }
+    }
+
+    function measureBrightness() {
+        if (!video.videoWidth || !video.videoHeight) return null;
+        const canvas = document.createElement('canvas');
+        canvas.width = 64;
+        canvas.height = 48;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return null;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const image = ctx.getImageData(12, 8, 40, 32).data;
+        let total = 0;
+        const pixels = image.length / 4;
+        if (!pixels) return null;
+        for (let i = 0; i < image.length; i += 4) {
+            total += (image[i] * 0.299) + (image[i + 1] * 0.587) + (image[i + 2] * 0.114);
+        }
+        return total / pixels;
     }
 
     function getBlinkThresholds() {
@@ -749,16 +978,27 @@ function initKiosk() {
     function verifyLiveness() {
         if (!candidateEmployee) return;
         isLivenessVerified = true;
+        markChecklistComplete('verification');
         if (detectedNameInput) detectedNameInput.value = recognizedEmployeeName || candidateEmployee.name;
         if (userIdInput) userIdInput.value = recognizedEmployeeId || candidateEmployee.id;
         if (submitBtn) submitBtn.disabled = true;
         setCaptureReady(true);
+        setFaceStatus('success', 'Wajah terdeteksi');
         updateStatus("Wajah terverifikasi", "success", 900, true);
+        setInstructionPanelState({
+            state: 'success',
+            stepLabel: 'Instruksi',
+            text: 'Verifikasi berhasil.',
+            hint: '',
+            icon: 'fa-circle-check',
+            progressStep: 3,
+            progressLabel: 'Selesai',
+            statusLabel: 'OK',
+        });
         setVideoState('verified');
         if (successOverlay) successOverlay.classList.add('is-visible');
         playSuccessBeep();
         stopScanning();
-        hideInstruction();
     }
 
     function updateLiveness(detections) {
@@ -770,23 +1010,76 @@ function initKiosk() {
             livenessStartedAt = now;
         }
         if (!livenessSequence.length) initLivenessChallenge();
-        const step = livenessSequence[livenessStepIndex] || 'left';
-        setVideoState('detecting');
-        showInstruction(step === 'left' ? 'Nengok ke kiri untuk verifikasi' : 'Nengok ke kanan untuk verifikasi');
         const yaw = getYaw(landmarks);
-        const ok =
-            (step === 'left' && yaw <= -YAW_TURN_THRESHOLD) ||
-            (step === 'right' && yaw >= YAW_TURN_THRESHOLD);
         const stable = isFaceStable(detections.detection?.box) || isFaceCentered(detections);
+
+        markChecklistComplete('face');
+        markChecklistComplete('lighting');
+
+        if (!faceDetectedAt) faceDetectedAt = now;
+        if (now - faceDetectedAt < FACE_DETECTED_HOLD_MS) {
+            setVideoState('recognized');
+            setFaceStatus('success', 'Wajah terdeteksi');
+            updateStatus("Wajah terdeteksi", "success", 450, true);
+            setInstructionPanelState({
+                state: 'instruction',
+                stepLabel: 'Instruksi',
+                text: 'Wajah terdeteksi.',
+                hint: '',
+                icon: 'fa-face-smile',
+                progressStep: 2,
+                progressLabel: 'Wajah',
+                statusLabel: 'OK',
+            });
+            return;
+        }
+
+        const step = livenessSequence[livenessStepIndex] || 'move';
+        const prompt = getLivenessPrompt(step);
+        const pitch = getPitch(landmarks);
+        updatePitchBaseline(pitch, stable, yaw);
+        const pitchDelta = pitchBaseline !== null ? pitch - pitchBaseline : 0;
+        const ok =
+            Math.abs(yaw) >= YAW_TURN_THRESHOLD ||
+            (pitchBaseline !== null && Math.abs(pitchDelta) >= PITCH_MOVE_THRESHOLD);
+
+        setVideoState('detecting');
+        focusChecklistStep(prompt.checklistKey);
+        setInstructionPanelState({
+            state: 'instruction',
+            stepLabel: prompt.stepLabel,
+            text: prompt.text,
+            hint: prompt.hint,
+            icon: prompt.icon,
+            progressStep: prompt.progressStep,
+            progressLabel: prompt.progressLabel,
+            statusLabel: prompt.statusLabel,
+        });
+
         if (ok && stable) headStableFrames += 1;
         else headStableFrames = 0;
+
         if (headStableFrames >= HEAD_STABLE_FRAMES_REQUIRED) {
+            markChecklistComplete(prompt.checklistKey);
             livenessStepIndex += 1;
             headStableFrames = 0;
+            livenessChallengeStartedAt = now;
         }
 
         if (livenessStepIndex < livenessSequence.length) return;
-        showInstruction('Memverifikasi...');
+
+        focusChecklistStep('verification');
+        setFaceStatus('instruction', 'Memverifikasi identitas');
+        setInstructionPanelState({
+            state: 'instruction',
+            stepLabel: 'Instruksi',
+            text: 'Memverifikasi identitas...',
+            hint: '',
+            icon: 'fa-spinner fa-spin',
+            progressStep: 3,
+            progressLabel: 'Verifikasi',
+            statusLabel: 'Arah',
+        });
         if (!livenessChallengeStartedAt) livenessChallengeStartedAt = now;
         if (now - livenessChallengeStartedAt < MIN_LIVENESS_DURATION_MS) {
             setVideoState('detecting');
@@ -844,8 +1137,19 @@ function initKiosk() {
         }
         if (!isFaceSystemReady) {
             setCaptureReady(false);
+            setFaceStatus('detecting', 'Menyiapkan kamera');
             updateStatus("Memuat model wajah...", "info", 0, true);
             setVideoState('detecting');
+            setInstructionPanelState({
+                state: 'detecting',
+                stepLabel: 'Instruksi',
+                text: 'Posisikan wajah di dalam bingkai.',
+                hint: '',
+                icon: 'fa-brain',
+                progressStep: 1,
+                progressLabel: 'Deteksi wajah',
+                statusLabel: 'Scan',
+            });
             ensureModelsLoaded();
             return;
         }
@@ -877,8 +1181,10 @@ function initKiosk() {
             if (missingFaceFrames >= FACE_MISSING_RESET_FRAMES) resetMatchState();
             if (!isLivenessVerified) {
                 if (detectedNameInput) detectedNameInput.value = "";
+                setFaceStatus('detecting', 'Wajah belum terdeteksi');
                 updateStatus("Arahkan wajah ke kamera", "info", 900);
                 setVideoState('detecting');
+                showDefaultInstruction();
             }
             if (manualPickBtn) manualPickBtn.classList.add('d-none');
             return;
@@ -887,7 +1193,18 @@ function initKiosk() {
         if (!faceMatcher) {
             setCaptureReady(false);
             setVideoState('detecting');
+            setFaceStatus('detecting', 'Menyiapkan data wajah');
             updateStatus("Menyiapkan data karyawan...", "info", 0, true);
+            setInstructionPanelState({
+                state: 'detecting',
+                stepLabel: 'Instruksi',
+                text: 'Posisikan wajah di dalam bingkai.',
+                hint: '',
+                icon: 'fa-database',
+                progressStep: 1,
+                progressLabel: 'Deteksi wajah',
+                statusLabel: 'Scan',
+            });
             ensureMatcherReady();
             if (manualPickBtn) manualPickBtn.classList.remove('d-none');
             return;
@@ -895,10 +1212,20 @@ function initKiosk() {
 
         if (detections.detection && detections.detection.score < MIN_DETECTION_SCORE) {
             setCaptureReady(false);
-            hideInstruction();
+            setFaceStatus('detecting', 'Posisikan wajah');
             if (!isLivenessVerified && isFaceCentered(detections)) updateStatus("", "info");
             else updateStatus("Posisikan wajah di oval", "warning", INSTRUCTION_HOLD_MS);
             setVideoState('detecting');
+            setInstructionPanelState({
+                state: 'instruction',
+                stepLabel: 'Instruksi',
+                text: 'Posisikan wajah di dalam bingkai.',
+                hint: '',
+                icon: 'fa-camera',
+                progressStep: 1,
+                progressLabel: 'Deteksi wajah',
+                statusLabel: 'Arah',
+            });
             return;
         }
 
@@ -906,12 +1233,25 @@ function initKiosk() {
             if (!isFaceCentered(detections)) {
                 updateStatus("Posisikan wajah di oval", "warning", 900);
                 setVideoState('detecting');
+                setFaceStatus('detecting', 'Posisikan wajah');
+                setInstructionPanelState({
+                    state: 'instruction',
+                    stepLabel: 'Instruksi',
+                    text: 'Posisikan wajah di dalam bingkai.',
+                    hint: '',
+                    icon: 'fa-expand',
+                    progressStep: 1,
+                    progressLabel: 'Deteksi wajah',
+                    statusLabel: 'Arah',
+                });
                 return;
             }
             candidateEmployee = manualSelectedEmployee;
             recognizedEmployeeId = String(manualSelectedEmployee.id);
             recognizedEmployeeName = manualSelectedEmployee.name;
             if (detectedNameInput) detectedNameInput.value = recognizedEmployeeName;
+            setFaceStatus('success', 'Wajah terdeteksi');
+            if (!faceDetectedAt) faceDetectedAt = Date.now();
             updateLiveness(detections);
             return;
         }
@@ -919,14 +1259,25 @@ function initKiosk() {
         const result = faceMatcher.findBestMatch(detections.descriptor);
         if (result.label === 'unknown' || result.distance > MATCH_THRESHOLD) {
             setCaptureReady(false);
-            hideInstruction();
             unknownFaceFrames += 1;
             if (!isLivenessVerified && candidateEmployee && unknownFaceFrames >= 3) initLivenessChallenge();
             if (unknownFaceFrames >= UNKNOWN_RESET_FRAMES) resetMatchState();
             if (!isLivenessVerified) {
                 if (detectedNameInput) detectedNameInput.value = "";
+                setFaceStatus('failed', 'Wajah belum dikenali');
                 updateStatus("Wajah belum dikenali", "warning", INSTRUCTION_HOLD_MS);
                 setVideoState('detecting');
+                focusChecklistStep('face');
+                setInstructionPanelState({
+                    state: 'failed',
+                    stepLabel: 'Instruksi',
+                    text: 'Wajah belum dikenali.',
+                    hint: '',
+                    icon: 'fa-user-xmark',
+                    progressStep: 1,
+                    progressLabel: 'Deteksi wajah',
+                    statusLabel: 'Gagal',
+                });
             }
             if (manualPickBtn) manualPickBtn.classList.toggle('d-none', unknownFaceFrames < 6);
             return;
@@ -968,13 +1319,27 @@ function initKiosk() {
             initLivenessChallenge();
             recognizedEmployeeId = String(candidateEmployee.id);
             recognizedEmployeeName = candidateEmployee.name;
+            faceDetectedAt = Date.now();
         }
 
         if (isAlreadyAttended) {
             setCaptureReady(false);
             if (submitBtn) submitBtn.disabled = true;
+            setAlreadyAttendedUI(true);
+            setFaceStatus('failed', 'Sudah absen');
             updateStatus("Sudah absen hari ini", "secondary", INSTRUCTION_HOLD_MS);
-            if (detectedNameInput) detectedNameInput.value = "Sudah absen";
+            if (detectedNameInput) detectedNameInput.value = recognizedEmployeeName || matchedEmployee.name;
+            failChecklistStep('verification');
+            setInstructionPanelState({
+                state: 'failed',
+                stepLabel: 'Instruksi',
+                text: 'Anda sudah absen hari ini.',
+                hint: '',
+                icon: 'fa-ban',
+                progressStep: 1,
+                progressLabel: 'Sudah absen',
+                statusLabel: '',
+            });
             stopScanning();
             return;
         }
@@ -990,18 +1355,30 @@ function initKiosk() {
             initLivenessChallenge();
             updateStatus("Posisikan wajah di oval", "warning", INSTRUCTION_HOLD_MS);
             setVideoState('detecting');
-            hideInstruction();
+            setFaceStatus('detecting', 'Posisikan wajah');
+            setInstructionPanelState({
+                state: 'instruction',
+                stepLabel: 'Instruksi',
+                text: 'Posisikan wajah di dalam bingkai.',
+                hint: '',
+                icon: 'fa-expand',
+                progressStep: 1,
+                progressLabel: 'Deteksi wajah',
+                statusLabel: 'Arah',
+            });
             if (detectedNameInput) detectedNameInput.value = `${recognizedEmployeeName || matchedEmployee.name} • Posisikan di oval`;
             return;
         }
 
         updateStatus("", "info");
-        setVideoState('detecting');
+        setVideoState('recognized');
+        setFaceStatus('success', 'Wajah terdeteksi');
         updateLiveness(detections);
         if (!isLivenessVerified && detectedNameInput) detectedNameInput.value = recognizedEmployeeName || matchedEmployee.name;
     }
 
     function startVideo() {
+        setFaceStatus('detecting', 'Menyiapkan kamera');
         updateStatus("Menyiapkan kamera...", "info", 0, true);
         setVideoLoading(true);
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -1024,17 +1401,41 @@ function initKiosk() {
                     setVideoLoading(false);
                     updateStatus("Siap memindai", "info", 0, true);
                     setVideoState('detecting');
+                    setFaceStatus('detecting', 'Arahkan wajah ke kamera');
+                    showDefaultInstruction();
                     initLivenessChallenge();
                     ensureMatcherReady();
                     startScanning();
                 };
             }).catch(() => {
                 setVideoLoading(false);
+                setFaceStatus('failed', 'Kamera tidak tersedia');
                 updateStatus("Kamera error", "danger", 1600, true);
+                setInstructionPanelState({
+                    state: 'failed',
+                    stepLabel: 'Instruksi',
+                    text: 'Verifikasi gagal. Kamera tidak dapat diakses.',
+                    hint: '',
+                    icon: 'fa-camera-slash',
+                    progressStep: 1,
+                    progressLabel: 'Deteksi wajah',
+                    statusLabel: 'Gagal',
+                });
             });
         } else {
             setVideoLoading(false);
+            setFaceStatus('failed', 'Kamera tidak tersedia');
             updateStatus("Kamera tidak tersedia", "danger", 1600, true);
+            setInstructionPanelState({
+                state: 'failed',
+                stepLabel: 'Instruksi',
+                text: 'Verifikasi gagal. Kamera tidak tersedia.',
+                hint: '',
+                icon: 'fa-camera-slash',
+                progressStep: 1,
+                progressLabel: 'Deteksi wajah',
+                statusLabel: 'Gagal',
+            });
         }
     }
 
@@ -1048,11 +1449,26 @@ function initKiosk() {
     function openScanner() {
         scanInterface.style.display = 'flex';
         requestAnimationFrame(() => scanInterface.classList.add('is-open'));
+        setAlreadyAttendedUI(false);
+        resetChecklist('face');
+        setFaceStatus('detecting', 'Memeriksa lokasi');
+        showDefaultInstruction();
         updateStatus("Memeriksa lokasi...", "info", 0, true);
         startVideo();
 
         if (!navigator.geolocation) {
             updateStatus("GPS tidak tersedia", "danger", 1400, true);
+            setFaceStatus('failed', 'GPS tidak tersedia');
+            setInstructionPanelState({
+                state: 'failed',
+                stepLabel: 'Instruksi',
+                text: 'Verifikasi gagal. GPS tidak tersedia.',
+                hint: '',
+                icon: 'fa-location-crosshairs',
+                progressStep: 1,
+                progressLabel: 'Deteksi wajah',
+                statusLabel: 'Gagal',
+            });
             setTimeout(() => closeScanner(), 1000);
             return;
         }
@@ -1065,14 +1481,37 @@ function initKiosk() {
             const distanceM = getDistanceFromLatLonInKm(lat, lng, OFFICE_LAT, OFFICE_LNG) * 1000;
             if (distanceM > MAX_RADIUS) {
                 updateStatus(`Di luar radius (${Math.round(distanceM)}m)`, "danger", 1600, true);
+                setFaceStatus('failed', 'Di luar radius');
+                setInstructionPanelState({
+                    state: 'failed',
+                    stepLabel: 'Instruksi',
+                    text: 'Verifikasi gagal. Anda berada di luar radius absensi.',
+                    hint: '',
+                    icon: 'fa-location-dot',
+                    progressStep: 1,
+                    progressLabel: 'Deteksi wajah',
+                    statusLabel: 'Gagal',
+                });
                 setTimeout(() => closeScanner(), 1200);
                 return;
             }
             const landing = document.getElementById('landingPage');
             if (landing) landing.classList.add('d-none');
+            setFaceStatus('detecting', 'Arahkan wajah ke kamera');
             updateStatus("Siap memindai", "info", 600, true);
         }, () => {
             updateStatus("Izin lokasi ditolak", "danger", 1600, true);
+            setFaceStatus('failed', 'Izin lokasi ditolak');
+            setInstructionPanelState({
+                state: 'failed',
+                stepLabel: 'Instruksi',
+                text: 'Verifikasi gagal. Izin lokasi ditolak.',
+                hint: '',
+                icon: 'fa-location-crosshairs',
+                progressStep: 1,
+                progressLabel: 'Deteksi wajah',
+                statusLabel: 'Gagal',
+            });
             setTimeout(() => closeScanner(), 1200);
         }, { enableHighAccuracy: false, timeout: 3000, maximumAge: 60000 });
     }
@@ -1090,7 +1529,7 @@ function initKiosk() {
 
     async function captureAndDetect() {
         if (isAlreadyAttended) {
-            if (detectedNameInput) detectedNameInput.value = "Sudah absen";
+            if (detectedNameInput) detectedNameInput.value = recognizedEmployeeName || candidateEmployee?.name || "";
             return;
         }
 
@@ -1101,6 +1540,17 @@ function initKiosk() {
         }
         if (!isLivenessVerified) {
             updateStatus("Tunggu validasi wajah...", "info", 650);
+            setFaceStatus('instruction', 'Selesaikan verifikasi');
+            setInstructionPanelState({
+                state: 'instruction',
+                stepLabel: 'Instruksi',
+                text: 'Memverifikasi identitas...',
+                hint: '',
+                icon: 'fa-spinner fa-spin',
+                progressStep: 3,
+                progressLabel: 'Verifikasi',
+                statusLabel: 'Arah',
+            });
             return;
         }
 
@@ -1122,19 +1572,31 @@ function initKiosk() {
         capturedImage.src = dataUrl;
         capturedImage.style.display = 'block';
         if (captureBtn) captureBtn.classList.add('d-none');
-        if (actionButtons) actionButtons.classList.remove('d-none');
+        if (submitBtn) submitBtn.classList.remove('d-none');
         const photo = document.getElementById('photo');
         if (photo) photo.value = dataUrl;
         if (submitBtn) submitBtn.disabled = false;
+        setFaceStatus('success', 'Foto siap dikonfirmasi');
         updateStatus("Foto siap dikonfirmasi", "success", 900, true);
+        setInstructionPanelState({
+            state: 'success',
+            stepLabel: 'Instruksi',
+            text: 'Verifikasi berhasil.',
+            hint: '',
+            icon: 'fa-image',
+            progressStep: 3,
+            progressLabel: 'Selesai',
+            statusLabel: 'OK',
+        });
     }
 
     function resetCamera() {
         isProcessing = false;
+        setAlreadyAttendedUI(false);
         video.style.display = 'block';
         capturedImage.style.display = 'none';
         if (captureBtn) captureBtn.classList.remove('d-none');
-        if (actionButtons) actionButtons.classList.add('d-none');
+        if (submitBtn) submitBtn.classList.add('d-none');
         if (detectedNameInput) detectedNameInput.value = "";
         if (userIdInput) userIdInput.value = "";
         if (submitBtn) submitBtn.disabled = true;
@@ -1142,20 +1604,35 @@ function initKiosk() {
         isAlreadyAttended = false;
         candidateEmployee = null;
         manualSelectedEmployee = null;
+        resetChecklist('face');
         resetMatchState();
         initLivenessChallenge();
+        setFaceStatus('detecting', 'Arahkan wajah ke kamera');
         updateStatus("Siap memindai", "info", 450, true);
         setVideoState('detecting');
-        hideInstruction();
+        showDefaultInstruction();
         if (scanInterface && scanInterface.style.display !== 'none') startScanning();
     }
 
     function submitAttendance() {
         if (!isLivenessVerified || !userIdInput || !userIdInput.value) {
             updateStatus("Verifikasi belum lengkap", "danger", 1400, true);
+            failChecklistStep('verification');
             return;
         }
+        setFaceStatus('instruction', 'Menyimpan absensi');
         updateStatus("Menyimpan absensi...", "info", 0, true);
+        focusChecklistStep('verification');
+        setInstructionPanelState({
+            state: 'instruction',
+            stepLabel: 'Instruksi',
+            text: 'Memverifikasi identitas...',
+            hint: '',
+            icon: 'fa-spinner fa-spin',
+            progressStep: 3,
+            progressLabel: 'Verifikasi',
+            statusLabel: 'Arah',
+        });
         const form = document.getElementById('attendanceForm');
         if (form) form.submit();
     }
@@ -1184,6 +1661,10 @@ function initKiosk() {
             recognizedEmployeeName = employee.name;
             if (detectedNameInput) detectedNameInput.value = employee.name;
             updateStatus("Nama dipilih • arahkan wajah", "info", 900, true);
+            setFaceStatus('detecting', 'Arahkan wajah ke kamera');
+            faceDetectedAt = Date.now();
+            resetChecklist('face');
+            showDefaultInstruction();
             closeManualModal();
         });
     }
@@ -1197,7 +1678,11 @@ function initKiosk() {
     window.submitAttendance = submitAttendance;
 
     setCaptureReady(false);
+    if (submitBtn) submitBtn.classList.add('d-none');
+    setFaceStatus('detecting', 'Wajah belum terdeteksi');
     updateStatus("Memulai...", "info", 0, true);
+    resetChecklist('face');
+    showDefaultInstruction();
     ensureMatcherReady();
 }
 

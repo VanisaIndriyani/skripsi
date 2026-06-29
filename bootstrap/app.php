@@ -19,4 +19,4 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->create()
-    ->usePublicPath('/home/facepayr/public_html');
+    ->usePublicPath(file_exists('/home/facepayr/public_html') ? '/home/facepayr/public_html' : base_path('public'));
