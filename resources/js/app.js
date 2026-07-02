@@ -1,10 +1,17 @@
 import './bootstrap';
 
-const FACE_API_CDN = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js';
+const FACE_API_SOURCES = [
+    '/vendor/face-api.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/face-api.js/0.22.2/face-api.min.js',
+    'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js',
+];
 
-function ensureScriptLoaded(src) {
+const SCRIPT_LOAD_TIMEOUT_MS = 12000;
+
+function ensureScriptLoaded(src, timeoutMs = SCRIPT_LOAD_TIMEOUT_MS) {
     return new Promise((resolve, reject) => {
-        const existing = Array.from(document.scripts || []).find((s) => s && s.src === src);
+        const targetHref = new URL(src, window.location.href).href;
+        const existing = Array.from(document.scripts || []).find((s) => s && s.src === targetHref);
         if (existing) {
             if (existing.dataset.loaded === 'true') return resolve();
             existing.addEventListener('load', () => resolve(), { once: true });
@@ -12,15 +19,37 @@ function ensureScriptLoaded(src) {
             return;
         }
         const script = document.createElement('script');
-        script.src = src;
+        script.src = targetHref;
         script.async = true;
+        const timeoutId = window.setTimeout(() => {
+            try { script.remove(); } catch (e) {}
+            reject(new Error(`Script load timeout: ${src}`));
+        }, timeoutMs);
         script.addEventListener('load', () => {
+            window.clearTimeout(timeoutId);
             script.dataset.loaded = 'true';
             resolve();
         }, { once: true });
-        script.addEventListener('error', (e) => reject(e), { once: true });
+        script.addEventListener('error', (e) => {
+            window.clearTimeout(timeoutId);
+            reject(e);
+        }, { once: true });
         document.head.appendChild(script);
     });
+}
+
+async function ensureScriptLoadedAny(sources) {
+    const list = Array.isArray(sources) ? sources : [];
+    let lastErr = null;
+    for (const src of list) {
+        try {
+            await ensureScriptLoaded(src);
+            return;
+        } catch (e) {
+            lastErr = e;
+        }
+    }
+    throw lastErr || new Error('Failed to load script');
 }
 
 function initKioskClock() {
@@ -475,7 +504,7 @@ function initKiosk() {
 
     function ensureModelsLoaded() {
         if (modelsPromise) return modelsPromise;
-        modelsPromise = ensureScriptLoaded(FACE_API_CDN).then(async () => {
+        modelsPromise = ensureScriptLoadedAny(FACE_API_SOURCES).then(async () => {
             if (!window.faceapi) throw new Error('faceapi missing');
             try {
                 if (window.faceapi.tf && typeof window.faceapi.tf.setBackend === 'function') {
@@ -483,6 +512,20 @@ function initKiosk() {
                     if (typeof window.faceapi.tf.ready === 'function') await window.faceapi.tf.ready();
                 }
             } catch (e) {}
+            const base = String(MODEL_URL || '').replace(/\/+$/, '');
+            const manifests = [
+                `${base}/tiny_face_detector_model-weights_manifest.json`,
+                `${base}/face_landmark_68_model-weights_manifest.json`,
+                `${base}/face_recognition_model-weights_manifest.json`,
+            ];
+            for (const url of manifests) {
+                try {
+                    const res = await fetch(url, { cache: 'no-store' });
+                    if (!res.ok) throw new Error(`Model not found: ${url} (${res.status})`);
+                } catch (e) {
+                    throw new Error(`Model load failed. ${String(e && e.message ? e.message : e)}`);
+                }
+            }
             return Promise.all([
                 window.faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
                 window.faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
@@ -493,6 +536,19 @@ function initKiosk() {
         }).catch((err) => {
             console.error(err);
             updateStatus("Gagal memuat model", "danger", 1400, true);
+            try {
+                setFaceStatus('failed', 'Model tidak termuat');
+                setInstructionPanelState({
+                    state: 'failed',
+                    stepLabel: 'Instruksi',
+                    text: 'Gagal memuat sistem. Refresh halaman.',
+                    hint: '',
+                    icon: 'fa-triangle-exclamation',
+                    progressStep: 1,
+                    progressLabel: 'Deteksi wajah',
+                    statusLabel: '',
+                });
+            } catch (e) {}
         });
         return modelsPromise;
     }
@@ -1382,15 +1438,31 @@ function initKiosk() {
         updateStatus("Menyiapkan kamera...", "info", 0, true);
         setVideoLoading(true);
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            navigator.mediaDevices.getUserMedia({
-                audio: false,
-                video: {
-                    facingMode: { ideal: "user" },
-                    width: { ideal: 640 },
-                    height: { ideal: 480 },
-                    frameRate: { ideal: 30, max: 30 }
+            const attempts = [
+                {
+                    audio: false,
+                    video: {
+                        facingMode: { ideal: "user" },
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        frameRate: { ideal: 30, max: 30 }
+                    }
+                },
+                { audio: false, video: { facingMode: { ideal: "user" } } },
+                { audio: false, video: true }
+            ];
+
+            (async () => {
+                let lastError = null;
+                for (const constraints of attempts) {
+                    try {
+                        return await navigator.mediaDevices.getUserMedia(constraints);
+                    } catch (e) {
+                        lastError = e;
+                    }
                 }
-            }).then(s => {
+                throw lastError || new Error('getUserMedia failed');
+            })().then(s => {
                 stream = s;
                 video.srcObject = stream;
                 video.onloadedmetadata = () => {
@@ -1407,19 +1479,26 @@ function initKiosk() {
                     ensureMatcherReady();
                     startScanning();
                 };
-            }).catch(() => {
+            }).catch((err) => {
                 setVideoLoading(false);
                 setFaceStatus('failed', 'Kamera tidak tersedia');
                 updateStatus("Kamera error", "danger", 1600, true);
+                const name = String(err && err.name ? err.name : '');
+                const msg =
+                    name === 'NotAllowedError' ? 'Izin kamera ditolak.' :
+                    name === 'NotFoundError' ? 'Kamera tidak ditemukan.' :
+                    name === 'NotReadableError' ? 'Kamera sedang dipakai aplikasi lain.' :
+                    name === 'OverconstrainedError' ? 'Kamera tidak kompatibel.' :
+                    'Kamera tidak dapat diakses.';
                 setInstructionPanelState({
                     state: 'failed',
                     stepLabel: 'Instruksi',
-                    text: 'Verifikasi gagal. Kamera tidak dapat diakses.',
+                    text: msg,
                     hint: '',
                     icon: 'fa-camera-slash',
                     progressStep: 1,
                     progressLabel: 'Deteksi wajah',
-                    statusLabel: 'Gagal',
+                    statusLabel: '',
                 });
             });
         } else {
@@ -1434,7 +1513,7 @@ function initKiosk() {
                 icon: 'fa-camera-slash',
                 progressStep: 1,
                 progressLabel: 'Deteksi wajah',
-                statusLabel: 'Gagal',
+                statusLabel: '',
             });
         }
     }
