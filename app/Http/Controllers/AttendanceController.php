@@ -179,8 +179,8 @@ class AttendanceController extends Controller
         $endpoint = $baseUrl . '/facepp/v3/compare';
 
         $response = Http::asMultipart()
-            ->timeout((int) env('FACEPP_TIMEOUT', 10))
-            ->retry(1, 200)
+            ->timeout((int) env('FACEPP_TIMEOUT', 30))
+            ->retry(3, 1000)
             ->attach('image_file1', $capturedBytes, 'captured.jpg')
             ->attach('image_file2', $employeeBytes, 'employee.jpg')
             ->post($endpoint, [
